@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>SGN - Lançador de Pareceres</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .terminal { font-family: 'Fira Code', monospace; background: #0d1117; color: #3fb950; height: 450px; overflow-y: auto; border: 1px solid #30363d; padding: 10px; border-radius: 8px; font-size: 13px; }
+        .log-error { color: #f85149; }
+        .log-info { color: #58a6ff; }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-md border-t-8 border-green-600">
+        <a href="/" class="text-blue-500 hover:underline mb-4 inline-block">← Voltar ao Início</a>
+        
+        <h1 class="text-2xl font-bold mb-6 text-gray-800"> Lançador Automático de Pareceres</h1>
+
+        <div class="space-y-4 mb-6">
+            <div class="grid grid-cols-2 gap-4">
+                <input type="text" id="usuario" placeholder="Usuário SGN (ex: marcos.sc)" class="p-3 border rounded">
+                <input type="password" id="senha" placeholder="Senha" class="p-3 border rounded">
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <input type="text" id="link" placeholder="Cole o link do Diário de Classe aqui" class="col-span-2 p-3 border rounded w-full">
+                <select id="trSelection" class="p-3 border rounded w-full bg-white font-medium text-gray-700">
+                    <option value="TR1">TR1 - Primeiro Trimestre</option>
+                    <option value="TR2">TR2 - Segundo Trimestre</option>
+                    <option value="TR3" selected>TR3 - Terceiro Trimestre</option>
+                </select>
+            </div>
+            <button id="btnIniciar" onclick="iniciarRobo()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-colors">
+                🚀 Iniciar Lançamento de Pareceres
+            </button>
+        </div>
+
+        <div id="terminal" class="terminal mt-6 flex flex-col gap-1"></div>
+    </div>
+
+    <script>
+        let jobId = null;
+        let lastQueuePosition = null;
+
+        function addLogToScreen(msg) {
+            const term = document.getElementById('terminal');
+            const div = document.createElement('div');
+            div.textContent = msg;
+            if(msg.includes('❌') || msg.toLowerCase().includes('erro')) div.className = 'log-error';
+            else if(msg.includes('✅') || msg.includes('🚀')) div.className = 'log-info';
+            term.appendChild(div);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        async function iniciarRobo() {
+            const user = document.getElementById('usuario').value;
+            const password = document.getElementById('senha').value;
+            const diaryLink = document.getElementById('link').value;
+            const trSelection = document.getElementById('trSelection').value; // Captura a escolha do Trimestre
+
+            if (!user || !password || !diaryLink) {
+                alert('Preencha usuário, senha e o link do diário!');
+                return;
+            }
+
+            document.getElementById('btnIniciar').disabled = true;
+            document.getElementById('terminal').innerHTML = '';
+            addLogToScreen("⏳ Conectando ao servidor...");
+
+            try {
+                // Envia o trSelection junto no corpo da requisição (body)
+                const res = await fetch('http://localhost:3000/api/run-pareceres', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user, password, diaryLink, trSelection })
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Erro de rede ou servidor bloqueou: ${res.status}`);
+                }
+
+                const data = await res.json();
+                jobId = data.jobId;
+                monitorarLogs();
+            } catch (error) {
+                addLogToScreen(`❌ Erro ao conectar: ${error.message}. O servidor Node (node server.js) está rodando?`);
+                document.getElementById('btnIniciar').disabled = false;
+            }
+        }
+
+        async function monitorarLogs() {
+            if (!jobId) return;
+            
+            try {
+                const res = await fetch(`http://localhost:3000/api/status/${jobId}`);
+                const data = await res.json();
+
+                const term = document.getElementById('terminal');
+                term.innerHTML = ""; 
+                data.logs.forEach(addLogToScreen);
+
+                if (data.status === 'queued') {
+                    if (data.position && data.position !== lastQueuePosition) {
+                        addLogToScreen(`⏳ Robô ocupado. Você está na posição ${data.position} da fila.`);
+                        lastQueuePosition = data.position;
+                    }
+                    setTimeout(monitorarLogs, 5000);
+                } else if (data.status === 'running') {
+                    setTimeout(monitorarLogs, 5000);
+                } else {
+                    document.getElementById('btnIniciar').disabled = false;
+                    addLogToScreen("--- FIM DO PROCESSO ---");
+                }
+            } catch (error) {
+                addLogToScreen(`❌ Erro ao buscar logs: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

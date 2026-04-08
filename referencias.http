@@ -1,0 +1,110 @@
+### Get all usuarios
+GET http://localhost:3000/api/usuarios
+
+###
+
+### Create usuario
+POST http://localhost:3000/api/usuarios
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "senha": "password"
+}
+
+###
+
+### Get usuario by id
+GET http://localhost:3000/api/usuarios/1
+
+###
+
+### Update usuario
+PUT http://localhost:3000/api/usuarios/1
+Content-Type: application/json
+
+{
+  "email": "updated@example.com",
+  "senha": "newpassword"
+}
+
+###
+
+### Delete usuario
+DELETE http://localhost:3000/api/usuarios/1
+
+###
+
+### Get all turmas
+GET http://localhost:3000/api/turmas
+
+###
+
+### Create turma
+POST http://localhost:3000/api/turmas
+Content-Type: application/json
+
+{
+  "nome": "Turma A",
+  "alunos": "João, Maria"
+}
+
+###
+
+### Get turma by id
+GET http://localhost:3000/api/turmas/1
+
+###
+
+### Update turma
+PUT http://localhost:3000/api/turmas/1
+Content-Type: application/json
+
+{
+  "nome": "Turma B",
+  "alunos": "Pedro, Ana"
+}
+
+###
+
+### Delete turma
+DELETE http://localhost:3000/api/turmas/1
+
+###
+
+### Get all ucs
+GET http://localhost:3000/api/ucs
+
+###
+
+### Create uc
+POST http://localhost:3000/api/ucs
+Content-Type: application/json
+
+{
+  "nome": "Unidade Curricular 1",
+  "link_diario": "http://example.com/diario"
+}
+
+###
+
+### Get uc by id
+GET http://localhost:3000/api/ucs/1
+
+###
+
+### Update uc
+PUT http://localhost:3000/api/ucs/1
+Content-Type: application/json
+
+{
+  "nome": "Unidade Curricular 2",
+  "link_diario": "http://example.com/diario2"
+}
+
+###
+
+### Delete uc
+DELETE http://localhost:3000/api/ucs/1
+
+###

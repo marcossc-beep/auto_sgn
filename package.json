@@ -1,0 +1,26 @@
+{
+  "name": "fastify-puppeteer-automation",
+  "version": "1.0.0",
+  "description": "Servidor de automação com Fastify e Puppeteer Stealth",
+  "main": "server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "./render-build.sh",
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@browserbasehq/stagehand": "^3.1.0",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/static": "^9.0.0",
+    "dotenv": "^16.6.1",
+    "fastify": "^5.2.0",
+    "pg": "^8.20.0",
+    "puppeteer": "24.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}

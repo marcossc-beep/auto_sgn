@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>SGN - Conceitos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .terminal { font-family: 'Fira Code', monospace; background: #0d1117; color: #3fb950; height: 350px; overflow-y: auto; border: 1px solid #30363d; }
+        .log-error { color: #f85149; }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-md">
+        <a href="/" class="text-blue-500 mb-4 inline-block">← Voltar</a>
+        <br>
+       
+        <br>
+        <br>
+        <h1 class="text-2xl font-bold mb-6">Lançador de Conceitos</h1>
+
+        
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <input type="text" id="user" placeholder="Usuário SGN" class="p-2 border rounded">
+            <input type="password" id="password" placeholder="Senha" class="p-2 border rounded">
+
+            <div>
+                <label for="turmaSelect" class="block text-sm font-medium text-gray-700 mb-1">Turma</label>
+                <select id="turmaSelect" class="w-full p-2 border rounded">
+                    <option value="">-- Selecione uma turma --</option>
+                </select>
+            </div>
+            <div class="flex items-end justify-end">
+                <button id="btnManageTurmas" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 px-4 rounded shadow transition">Gerenciar Turmas</button>
+            </div>
+
+            <div>
+                <label for="ucSelect" class="block text-sm font-medium text-gray-700 mb-1">UC</label>
+                <select id="ucSelect" class="w-full p-2 border rounded">
+                    <option value="">-- Selecione uma UC --</option>
+                </select>
+            </div>
+            <div class="flex items-end justify-end">
+                <button id="btnManageUcs" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 px-4 rounded shadow transition">Gerenciar UCs</button>
+            </div>
+
+            <input type="text" id="diaryLink" placeholder="Link do Diário" class="p-2 border rounded col-span-2">
+            <select id="avSelection" class="p-2 border rounded col-span-2">
+                <option value="AV1">AV1</option><option value="AV2">AV2</option><option value="AV3">AV3</option><option value="AV4">AV4</option><option value="AV5">AV5</option>
+            </select>
+            <textarea id="jsonData" placeholder="Cole o JSON aqui" class="p-2 border rounded col-span-2 h-32"></textarea>
+        </div>
+
+        <button id="btnRun" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition">INICIAR ROBÔ</button>
+
+        <div id="terminal" class="terminal mt-6 p-4 rounded-lg text-sm">
+            <p>> Aguardando comando...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { getAllTurmas, getTurmaById, openTurmaModal } from './modalTurma.js';
+        import { getAllUcs, getUcById, openUcModal } from './modalUc.js';
+
+        const terminal = document.getElementById('terminal');
+        const btnRun = document.getElementById('btnRun');
+        const btnManageTurmas = document.getElementById('btnManageTurmas');
+        const btnManageUcs = document.getElementById('btnManageUcs');
+        const turmaSelect = document.getElementById('turmaSelect');
+        const ucSelect = document.getElementById('ucSelect');
+        const diaryLink = document.getElementById('diaryLink');
+        const jsonData = document.getElementById('jsonData');
+        let lastLogCount = 0;
+        let lastQueuePosition = null;
+
+        function log(msg, type = '') {
+            const p = document.createElement('p');
+            if (type === 'error') p.className = 'log-error';
+            p.innerText = msg;
+            terminal.appendChild(p);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        async function pollStatus(jobId) {
+            const interval = setInterval(async () => {
+                const res = await fetch(`/api/status/${jobId}`);
+                const data = await res.json();
+
+                if (data.logs.length > lastLogCount) {
+                    data.logs.slice(lastLogCount).forEach(m => log(m));
+                    lastLogCount = data.logs.length;
+                }
+
+                if (data.status === 'queued') {
+                    if (data.position && data.position !== lastQueuePosition) {
+                        log(`⏳ Robô ocupado. Você está na posição ${data.position} da fila.`);
+                        lastQueuePosition = data.position;
+                    }
+                    btnRun.disabled = true;
+                    btnRun.innerText = 'AGUARDANDO FILA...';
+                    return;
+                }
+
+                if (data.status === 'running') {
+                    btnRun.disabled = true;
+                    btnRun.innerText = 'EXECUTANDO...';
+                    return;
+                }
+
+                if (data.status === 'completed' || data.status === 'error') {
+                    clearInterval(interval);
+                    btnRun.disabled = false;
+                    btnRun.innerText = 'INICIAR ROBÔ';
+                    log(`--- FIM DA EXECUÇÃO (${data.status}) ---`);
+                }
+            }, 5000);
+        }
+
+        async function refreshTurmaOptions() {
+            const turmas = await getAllTurmas();
+            turmaSelect.innerHTML = '<option value="">-- Selecione uma turma --</option>';
+            turmas.forEach(turma => {
+                const option = document.createElement('option');
+                option.value = turma.id;
+                option.textContent = turma.nome;
+                turmaSelect.appendChild(option);
+            });
+        }
+
+        async function refreshUcOptions() {
+            const ucs = await getAllUcs();
+            ucSelect.innerHTML = '<option value="">-- Selecione uma UC --</option>';
+            ucs.forEach(uc => {
+                const option = document.createElement('option');
+                option.value = uc.id;
+                option.textContent = uc.nome;
+                ucSelect.appendChild(option);
+            });
+        }
+
+        async function onTurmaSelected() {
+            const id = turmaSelect.value;
+            if (!id) {
+                return;
+            }
+            const turma = await getTurmaById(id);
+            const alunos = parseAlunoList(turma.alunos);
+            const json = alunos.map(nome => ({ nome, conceito: 'C' }));
+            jsonData.value = JSON.stringify(json, null, 4);
+            log(`✅ Turma carregada: ${turma.nome}`);
+        }
+
+        async function onUcSelected() {
+            const id = ucSelect.value;
+            if (!id) {
+                return;
+            }
+            const uc = await getUcById(id);
+            diaryLink.value = uc.link_diario || '';
+            log(`✅ UC carregada: ${uc.nome}`);
+        }
+
+        function parseAlunoList(value) {
+            if (!value) return [];
+
+            try {
+                const parsed = JSON.parse(value);
+                if (Array.isArray(parsed)) {
+                    return parsed.map(item => {
+                        if (typeof item === 'string') return item.trim();
+                        if (item && typeof item === 'object') return (item.nome || item.name || '').trim();
+                        return '';
+                    }).filter(Boolean);
+                }
+            } catch (error) {
+                // ignora se não for JSON
+            }
+
+            return value
+                .split(/[\r\n,]+/)
+                .map(item => item.trim())
+                .filter(Boolean);
+        }
+
+        btnRun.addEventListener('click', async () => {
+            btnRun.disabled = true;
+            btnRun.innerText = 'EXECUTANDO...';
+            lastLogCount = 0;
+            terminal.innerHTML = '<p>> Iniciando processo...</p>';
+
+            try {
+                const body = {
+                    user: document.getElementById('user').value,
+                    password: document.getElementById('password').value,
+                    diaryLink: diaryLink.value,
+                    avSelection: document.getElementById('avSelection').value,
+                    jsonData: JSON.parse(jsonData.value)
+                };
+
+                const res = await fetch('/api/run-conceitos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (!res.ok) {
+                    throw new Error('Falha ao iniciar o robô.');
+                }
+
+                const { jobId, position } = await res.json();
+                if (position > 1) {
+                    log(`⏳ Robô ocupado. Você está na posição ${position} da fila.`);
+                    lastQueuePosition = position;
+                }
+                pollStatus(jobId);
+            } catch (error) {
+                btnRun.disabled = false;
+                btnRun.innerText = 'INICIAR ROBÔ';
+                log(`❌ ${error.message}`, 'error');
+            }
+        });
+
+        btnManageTurmas.addEventListener('click', async () => {
+            await openTurmaModal(async () => {
+                await refreshTurmaOptions();
+            });
+        });
+
+        btnManageUcs.addEventListener('click', async () => {
+            await openUcModal(async () => {
+                await refreshUcOptions();
+            });
+        });
+
+        turmaSelect.addEventListener('change', onTurmaSelected);
+        ucSelect.addEventListener('change', onUcSelected);
+
+        async function initialize() {
+            await Promise.all([refreshTurmaOptions(), refreshUcOptions()]);
+        }
+
+        initialize();
+    </script>
+</body>
+</html>
