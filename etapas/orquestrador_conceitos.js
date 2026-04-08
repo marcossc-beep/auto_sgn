@@ -8,7 +8,7 @@ const LOG_FILE = path.join(process.cwd(), "automacao_logs.txt");
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function runConceitosAutomation({ user, password, diaryLink, avSelection, jsonData, addLog, cancellationToken }) {
+export async function runConceitosAutomation({ user, password, diaryLink, avSelection, jsonData, addLog }) {
   
   fs.writeFileSync(LOG_FILE, `--- Início da Execução: ${new Date().toLocaleString()} ---\n`, 'utf8');
 
@@ -22,15 +22,8 @@ export async function runConceitosAutomation({ user, password, diaryLink, avSele
     if (addLog) addLog(msg);
   };
 
-  const checkCancellation = () => {
-    if (cancellationToken && cancellationToken.shouldCancel()) {
-      throw new Error('Operação cancelada pelo usuário');
-    }
-  };
-
   log("🚀 Iniciando Orquestrador 100% PUPPETEER - V13 (Com Verificação de Status)");
 
-  checkCancellation();
   const loginResult = await realizarLogin(user, password, diaryLink, log);
   if (!loginResult.success) return { success: false, logs, message: loginResult.error };
 
@@ -65,7 +58,6 @@ const browser = await puppeteer.launch({
 
   try {
     log(`Navegando para o diário...`);
-    checkCancellation();
     await page.goto(diaryLink, { waitUntil: "networkidle2", timeout: 30000 });
 
     log('Abrindo aba CONCEITOS...');
@@ -99,10 +91,8 @@ const browser = await puppeteer.launch({
 
     while (temProximaPagina) {
       log(`\n📄 Verificando alunos na Página ${paginaAtual}...`);
-      checkCancellation();
 
       for (const aluno of jsonData) {
-        checkCancellation();
         // Verifica o status do aluno na tela antes de qualquer ação
         const statusAluno = await page.evaluate((nome) => {
           const rows = Array.from(document.querySelectorAll("#formHabilidadesCapacidades\\:dtHabilidadesCapacidades_data tr"));
@@ -225,7 +215,6 @@ const browser = await puppeteer.launch({
       if (temProximaPagina) {
         paginaAtual++;
         log(`   ➡️ Avançando para a Página ${paginaAtual}...`);
-        checkCancellation();
         await delay(3500);
       }
     }
