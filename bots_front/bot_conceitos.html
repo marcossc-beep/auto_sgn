@@ -50,10 +50,7 @@
             <textarea id="jsonData" placeholder="Cole o JSON aqui" class="p-2 border rounded col-span-2 h-32"></textarea>
         </div>
 
-        <div class=\"flex gap-3\">
-            <button id=\"btnRun\" class=\"flex-1 bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition\">INICIAR ROBÔ</button>
-            <button id=\"btnCancel\" class=\"flex-1 bg-red-600 text-white font-bold py-3 rounded hover:bg-red-700 transition hidden\">CANCELAR</button>
-        </div>
+        <button id="btnRun" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition">INICIAR ROBÔ</button>
 
         <div id="terminal" class="terminal mt-6 p-4 rounded-lg text-sm">
             <p>> Aguardando comando...</p>
@@ -66,7 +63,6 @@
 
         const terminal = document.getElementById('terminal');
         const btnRun = document.getElementById('btnRun');
-        const btnCancel = document.getElementById('btnCancel');
         const btnManageTurmas = document.getElementById('btnManageTurmas');
         const btnManageUcs = document.getElementById('btnManageUcs');
         const turmaSelect = document.getElementById('turmaSelect');
@@ -75,8 +71,6 @@
         const jsonData = document.getElementById('jsonData');
         let lastLogCount = 0;
         let lastQueuePosition = null;
-        let currentJobId = null;
-        let pollInterval = null;
 
         function log(msg, type = '') {
             const p = document.createElement('p');
@@ -87,8 +81,6 @@
         }
 
         async function pollStatus(jobId) {
-            btnCancel.classList.remove('hidden');
-            currentJobId = jobId;
             const interval = setInterval(async () => {
                 const res = await fetch(`/api/status/${jobId}`);
                 const data = await res.json();
@@ -114,12 +106,10 @@
                     return;
                 }
 
-                if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
+                if (data.status === 'completed' || data.status === 'error') {
                     clearInterval(interval);
                     btnRun.disabled = false;
                     btnRun.innerText = 'INICIAR ROBÔ';
-                    btnCancel.classList.add('hidden');
-                    currentJobId = null;
                     log(`--- FIM DA EXECUÇÃO (${data.status}) ---`);
                 }
             }, 5000);
@@ -225,22 +215,7 @@
             } catch (error) {
                 btnRun.disabled = false;
                 btnRun.innerText = 'INICIAR ROBÔ';
-                btnCancel.classList.add('hidden');
                 log(`❌ ${error.message}`, 'error');
-            }
-        });
-
-        btnCancel.addEventListener('click', async () => {
-            if (!currentJobId) return;
-            
-            try {
-                btnCancel.disabled = true;
-                const res = await fetch(`/api/cancel/${currentJobId}`, { method: 'POST' });
-                if (res.ok) {
-                    log('⏹️ Cancelamento solicitado. Finalizando...');
-                }
-            } catch (error) {
-                log(`❌ Erro ao cancelar: ${error.message}`, 'error');
             }
         });
 
