@@ -29,9 +29,14 @@
                     <option value="TR3" selected>TR3 - Terceiro Trimestre</option>
                 </select>
             </div>
-            <button id="btnIniciar" onclick="iniciarRobo()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-colors">
-                🚀 Iniciar Lançamento de Pareceres
-            </button>
+            <div class="flex gap-3">
+                <button id="btnIniciar" onclick="iniciarRobo()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-colors">
+                    🚀 Iniciar Lançamento de Pareceres
+                </button>
+                <button id="btnCancelar" onclick="cancelarRobo()" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition-colors hidden">
+                    ⏹️ Cancelar Operação
+                </button>
+            </div>
         </div>
 
         <div id="terminal" class="terminal mt-6 flex flex-col gap-1"></div>
@@ -40,6 +45,7 @@
     <script>
         let jobId = null;
         let lastQueuePosition = null;
+        let pollInterval = null;
 
         function addLogToScreen(msg) {
             const term = document.getElementById('terminal');
@@ -63,6 +69,7 @@
             }
 
             document.getElementById('btnIniciar').disabled = true;
+            document.getElementById('btnCancelar').classList.remove('hidden');
             document.getElementById('terminal').innerHTML = '';
             addLogToScreen("⏳ Conectando ao servidor...");
 
@@ -84,6 +91,21 @@
             } catch (error) {
                 addLogToScreen(`❌ Erro ao conectar: ${error.message}. O servidor Node (node server.js) está rodando?`);
                 document.getElementById('btnIniciar').disabled = false;
+                document.getElementById('btnCancelar').classList.add('hidden');
+            }
+        }
+
+        async function cancelarRobo() {
+            if (!jobId) return;
+            
+            try {
+                document.getElementById('btnCancelar').disabled = true;
+                const res = await fetch(`http://localhost:3000/api/cancel/${jobId}`, { method: 'POST' });
+                if (res.ok) {
+                    addLogToScreen('⏹️ Cancelamento solicitado. Finalizando...');
+                }
+            } catch (error) {
+                addLogToScreen(`❌ Erro ao cancelar: ${error.message}`);
             }
         }
 
@@ -108,6 +130,7 @@
                     setTimeout(monitorarLogs, 5000);
                 } else {
                     document.getElementById('btnIniciar').disabled = false;
+                    document.getElementById('btnCancelar').classList.add('hidden');
                     addLogToScreen("--- FIM DO PROCESSO ---");
                 }
             } catch (error) {

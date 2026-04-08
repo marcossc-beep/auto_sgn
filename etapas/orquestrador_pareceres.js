@@ -48,7 +48,7 @@ const sleep = (min = CONFIG.delays.min, max = CONFIG.delays.max) => {
 };
 
 class GradeAutomation {
-    constructor(page, browser, diaryLink, trSelection, addLog, pareceresDB) {
+    constructor(page, browser, diaryLink, trSelection, addLog, pareceresDB, cancellationToken) {
         this.page = page;
         this.browser = browser;
         this.url = diaryLink;
@@ -56,20 +56,30 @@ class GradeAutomation {
         this.addLog = addLog;
         this.PARECERES = pareceresDB;
         this.totalStudentsProcessed = 0;
+        this.cancellationToken = cancellationToken;
+    }
+
+    _checkCancellation() {
+        if (this.cancellationToken && this.cancellationToken.shouldCancel()) {
+            throw new Error('Operação cancelada pelo usuário');
+        }
     }
 
     async start() {
         try {
+            this._checkCancellation();
             this.addLog(`🚀 Iniciando Fase 1: Validação de Notas e Conceitos (${this.trSelection})...`);
             let conceptsSuccess = await this._processConceptsPhase();
             
             if (conceptsSuccess) {
+                this._checkCancellation();
                 const isValid = await this._verifyConceptsIntegrity();
                 
                 if (!isValid) {
                     this.addLog(`⚠️ Aviso: A validação apontou pendências (algum lápis não ficou verde). Indo para o Pedagógico mesmo assim por segurança...`);
                 }
 
+                this._checkCancellation();
                 this.addLog(`📚 Iniciando Fase 2: Lançamento de Pareceres Pedagógicos (${this.trSelection} e CF)...`);
                 await this._processPedagogicalPhase();
             }
@@ -83,6 +93,7 @@ class GradeAutomation {
 
     // ================= FASE 1: CONCEITOS =================
     async _processConceptsPhase() {
+        this._checkCancellation();
         await this._clickTab('CONCEITOS');
         await this._ensureConceptPeriodSelected();
         await this._waitForTable(SELECTORS.diary.tableBody);
@@ -96,6 +107,7 @@ class GradeAutomation {
         
         this.addLog(`📝 Preenchendo notas/atitudes de ${pending.length} aluno(s) pendente(s)...`);
         for (const student of pending) {
+            this._checkCancellation();
             await this._fillStudentModalSmart(student);
         }
         return true;
@@ -330,6 +342,7 @@ class GradeAutomation {
 
     // ================= FASE 2: PEDAGÓGICO =================
     async _processPedagogicalPhase() {
+        this._checkCancellation();
         await this._clickTab('PEDAGÓGICO');
         await sleep(2000, 3000);
 
@@ -344,6 +357,7 @@ class GradeAutomation {
         this.addLog(`Encontrados ${studentNames.length} alunos na aba pedagógica.`);
 
         for (const name of studentNames) {
+            this._checkCancellation();
             let sucessoAluno = false;
             let tentativasAluno = 0;
 
@@ -653,7 +667,7 @@ class GradeAutomation {
     }
 }
 
-export async function runPareceresAutomation({ user, password, diaryLink, trSelection, addLog }) {
+export async function runPareceresAutomation({ user, password, diaryLink, trSelection, addLog, cancellationToken }) {
     addLog(`🚀 Iniciando Motor de Automação Reestruturado (V4)...`);
 
     if (!fs.existsSync(pareceresCaminho)) throw new Error("Arquivo pareceres.json ausente.");
@@ -665,7 +679,10 @@ export async function runPareceresAutomation({ user, password, diaryLink, trSele
     const { browser, page } = loginResult;
 
     try {
-        const automacao = new GradeAutomation(page, browser, diaryLink, trSelection, addLog, PARECERES_DB);
+        if (cancellationToken && cancellationToken.shouldCancel()) {
+            throw new Error('Operação cancelada pelo usuário');
+        }
+        const automacao = new GradeAutomation(page, browser, diaryLink, trSelection, addLog, PARECERES_DB, cancellationToken);
         await automacao.start();
     } catch (error) {
         addLog(`❌ Processo interrompido devido a erro crítico: ${error.message}`);
