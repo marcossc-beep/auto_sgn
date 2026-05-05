@@ -83,7 +83,7 @@ const browser = await puppeteer.launch({
       const cells = Array.from(document.querySelectorAll("th, td"));
       for (const cell of cells) {
         if (cell.innerText.toUpperCase().includes(upper)) {
-          const pencil = cell.querySelector(".fa-pencil, .fa-edit, [class*='pencil'], button");
+          const pencil = cell.querySelector(".fa-pencil, .fa-edit, .fa-pencil-square-o, [class*='pencil'], button");
           if (pencil) pencil.click();
         }
       }
@@ -103,7 +103,7 @@ const browser = await puppeteer.launch({
 
       for (const aluno of jsonData) {
         checkCancellation();
-        // Verifica o status do aluno na tela antes de qualquer ação
+        // Verifica se o aluno está na tela
         const statusAluno = await page.evaluate((nome) => {
           const rows = Array.from(document.querySelectorAll("#formHabilidadesCapacidades\\:dtHabilidadesCapacidades_data tr"));
           const row = rows.find(r => r.innerText.includes(nome));
@@ -118,12 +118,7 @@ const browser = await puppeteer.launch({
 
         if (statusAluno === "nao_encontrado") continue;
 
-        if (statusAluno === "avaliado") {
-          log(`   ⏭️ Pulando: ${aluno.nome} (Já possui o check de avaliado)`);
-          continue;
-        }
-
-        // Se chegou aqui, o status é "pendente"
+        // Sempre processar alunos no JSON, independentemente do status
         log(`   👤 Processando: ${aluno.nome} → ${aluno.conceito}`);
 
         try {
