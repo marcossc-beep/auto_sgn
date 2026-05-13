@@ -5,268 +5,225 @@
     <title>SGN - Conceitos</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .terminal { font-family: 'Fira Code', monospace; background: #0d1117; color: #3fb950; height: 350px; overflow-y: auto; border: 1px solid #30363d; }
+        .terminal { 
+            font-family: 'Fira Code', monospace; 
+            background: #0d1117; 
+            color: #3fb950; 
+            height: 350px; 
+            overflow-y: auto; 
+            border: 1px solid #30363d; 
+            padding: 10px;
+            border-radius: 8px;
+        }
         .log-error { color: #f85149; }
+        .log-info { color: #3fb950; }
     </style>
 </head>
 <body class="bg-gray-100 p-8">
     <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-md">
-        <a href="/" class="text-blue-500 mb-4 inline-block">← Voltar</a>
-        <br>
-       
-        <br>
-        <br>
-        <h1 class="text-2xl font-bold mb-6">Lançador de Conceitos</h1>
-
+        <a href="/" class="text-blue-500 mb-4 inline-block">← Voltar para o Início</a>
         
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">Lançador de Conceitos (SGN)</h1>
+
         <div class="grid grid-cols-2 gap-4 mb-4">
-            <input type="text" id="user" placeholder="Usuário SGN" class="p-2 border rounded">
-            <input type="password" id="password" placeholder="Senha" class="p-2 border rounded">
-
             <div>
-                <label for="turmaSelect" class="block text-sm font-medium text-gray-700 mb-1">Turma</label>
-                <select id="turmaSelect" class="w-full p-2 border rounded">
-                    <option value="">-- Selecione uma turma --</option>
-                </select>
+                <label class="block text-sm font-bold mb-1">Usuário SGN</label>
+                <input type="text" id="user" placeholder="Ex: 12345678900" class="w-full p-2 border rounded">
             </div>
-            <div class="flex items-end justify-end">
-                <button id="btnManageTurmas" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 px-4 rounded shadow transition">Gerenciar Turmas</button>
+            <div>
+                <label class="block text-sm font-bold mb-1">Senha</label>
+                <input type="password" id="password" placeholder="Sua senha" class="w-full p-2 border rounded">
             </div>
 
             <div>
-                <label for="ucSelect" class="block text-sm font-medium text-gray-700 mb-1">UC</label>
-                <select id="ucSelect" class="w-full p-2 border rounded">
-                    <option value="">-- Selecione uma UC --</option>
-                </select>
-            </div>
-            <div class="flex items-end justify-end">
-                <button id="btnManageUcs" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 px-4 rounded shadow transition">Gerenciar UCs</button>
+                <label for="turmaSelect" class="block text-sm font-bold mb-1">Turma</label>
+                <div class="flex gap-2">
+                    <select id="turmaSelect" class="flex-1 p-2 border rounded bg-white">
+                        <option value="">Carregando turmas...</option>
+                    </select>
+                    <button id="btnManageTurmas" title="Gerenciar Turmas" class="bg-gray-200 px-3 rounded hover:bg-gray-300">⚙️</button>
+                </div>
             </div>
 
-            <input type="text" id="diaryLink" placeholder="Link do Diário" class="p-2 border rounded col-span-2">
-            <select id="avSelection" class="p-2 border rounded col-span-2">
-                <option value="AV1">AV1</option><option value="AV2">AV2</option><option value="AV3">AV3</option><option value="AV4">AV4</option><option value="AV5">AV5</option>
-                <option value="AV6">AV6</option><option value="AV7">AV7</option><option value="AV8">AV8</option><option value="AV9">AV9</option><option value="AV10">AV10</option>
-                <option value="RP1">RP1</option><option value="RP2">RP2</option><option value="RP3">RP3</option><option value="RP4">RP4</option><option value="RP5">RP5</option>
-                <option value="RP6">RP6</option><option value="RP7">RP7</option><option value="RP8">RP8</option><option value="RP9">RP9</option><option value="RP10">RP10</option>
-            </select>
-            <textarea id="jsonData" placeholder="Cole o JSON aqui" class="p-2 border rounded col-span-2 h-32"></textarea>
+            <div>
+                <label for="ucSelect" class="block text-sm font-bold mb-1">Unidade Curricular (UC)</label>
+                <div class="flex gap-2">
+                    <select id="ucSelect" class="flex-1 p-2 border rounded bg-white">
+                        <option value="">Carregando UCs...</option>
+                    </select>
+                    <button id="btnManageUcs" title="Gerenciar UCs" class="bg-gray-200 px-3 rounded hover:bg-gray-300">⚙️</button>
+                </div>
+            </div>
         </div>
 
-        <div class=\"flex gap-3\">
-            <button id=\"btnRun\" class=\"flex-1 bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition\">INICIAR ROBÔ</button>
-            <button id=\"btnCancel\" class=\"flex-1 bg-red-600 text-white font-bold py-3 rounded hover:bg-red-700 transition hidden\">CANCELAR</button>
+        <div class="flex gap-4 mb-6">
+            <button id="btnRun" class="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition">
+                INICIAR ROBÔ
+            </button>
+            <button id="btnCancel" class="hidden bg-red-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition">
+                PARAR
+            </button>
         </div>
 
-        <div id="terminal" class="terminal mt-6 p-4 rounded-lg text-sm">
-            <p>> Aguardando comando...</p>
+        <div id="terminal" class="terminal">
+            <div>[SISTEMA] Aguardando inicialização...</div>
         </div>
     </div>
 
-    <script type="module">
-        import { getAllTurmas, getTurmaById, openTurmaModal } from './modalTurma.js';
-        import { getAllUcs, getUcById, openUcModal } from './modalUc.js';
+    <script src="/modalTurma.js"></script>
+    <script src="/modalUc.js"></script>
 
-        const terminal = document.getElementById('terminal');
-        const btnRun = document.getElementById('btnRun');
-        const btnCancel = document.getElementById('btnCancel');
-        const btnManageTurmas = document.getElementById('btnManageTurmas');
-        const btnManageUcs = document.getElementById('btnManageUcs');
-        const turmaSelect = document.getElementById('turmaSelect');
-        const ucSelect = document.getElementById('ucSelect');
-        const diaryLink = document.getElementById('diaryLink');
-        const jsonData = document.getElementById('jsonData');
-        let lastLogCount = 0;
-        let lastQueuePosition = null;
+    <script>
+        // Mapeamento de elementos para evitar erro de 'null'
+        const elements = {
+            user: document.getElementById('user'),
+            pass: document.getElementById('password'),
+            turmaSelect: document.getElementById('turmaSelect'),
+            ucSelect: document.getElementById('ucSelect'),
+            btnRun: document.getElementById('btnRun'),
+            btnCancel: document.getElementById('btnCancel'),
+            terminal: document.getElementById('terminal'),
+            btnManageTurmas: document.getElementById('btnManageTurmas'),
+            btnManageUcs: document.getElementById('btnManageUcs')
+        };
+
         let currentJobId = null;
-        let pollInterval = null;
 
-        function log(msg, type = '') {
-            const p = document.createElement('p');
-            if (type === 'error') p.className = 'log-error';
-            p.innerText = msg;
-            terminal.appendChild(p);
-            terminal.scrollTop = terminal.scrollHeight;
+        function log(msg, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type === 'error' ? 'log-error' : 'log-info';
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            elements.terminal.appendChild(div);
+            elements.terminal.scrollTop = elements.terminal.scrollHeight;
         }
 
-        async function pollStatus(jobId) {
-            btnCancel.classList.remove('hidden');
-            currentJobId = jobId;
-            const interval = setInterval(async () => {
-                const res = await fetch(`/api/status/${jobId}`);
-                const data = await res.json();
-
-                if (data.logs.length > lastLogCount) {
-                    data.logs.slice(lastLogCount).forEach(m => log(m));
-                    lastLogCount = data.logs.length;
-                }
-
-                if (data.status === 'queued') {
-                    if (data.position && data.position !== lastQueuePosition) {
-                        log(`⏳ Robô ocupado. Você está na posição ${data.position} da fila.`);
-                        lastQueuePosition = data.position;
-                    }
-                    btnRun.disabled = true;
-                    btnRun.innerText = 'AGUARDANDO FILA...';
-                    return;
-                }
-
-                if (data.status === 'running') {
-                    btnRun.disabled = true;
-                    btnRun.innerText = 'EXECUTANDO...';
-                    return;
-                }
-
-                if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
-                    clearInterval(interval);
-                    btnRun.disabled = false;
-                    btnRun.innerText = 'INICIAR ROBÔ';
-                    btnCancel.classList.add('hidden');
-                    currentJobId = null;
-                    log(`--- FIM DA EXECUÇÃO (${data.status}) ---`);
-                }
-            }, 5000);
-        }
+        // --- FUNÇÕES DE BUSCA NO BANCO (NEON) ---
 
         async function refreshTurmaOptions() {
-            const turmas = await getAllTurmas();
-            turmaSelect.innerHTML = '<option value="">-- Selecione uma turma --</option>';
-            turmas.forEach(turma => {
-                const option = document.createElement('option');
-                option.value = turma.id;
-                option.textContent = turma.nome;
-                turmaSelect.appendChild(option);
-            });
+            try {
+                const res = await fetch('/api/turmas');
+                if (!res.ok) throw new Error('Erro na API de turmas');
+                const turmas = await res.json();
+                
+                elements.turmaSelect.innerHTML = '<option value="">Selecione uma turma</option>';
+                turmas.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = t.nome;
+                    // Salva os alunos como dado extra no select
+                    opt.dataset.alunos = typeof t.alunos === 'string' ? t.alunos : JSON.stringify(t.alunos);
+                    elements.turmaSelect.appendChild(opt);
+                });
+                log("✅ Turmas sincronizadas com o Banco Neon.");
+            } catch (err) {
+                log("❌ Erro ao buscar turmas: " + err.message, "error");
+            }
         }
 
         async function refreshUcOptions() {
-            const ucs = await getAllUcs();
-            ucSelect.innerHTML = '<option value="">-- Selecione uma UC --</option>';
-            ucs.forEach(uc => {
-                const option = document.createElement('option');
-                option.value = uc.id;
-                option.textContent = uc.nome;
-                ucSelect.appendChild(option);
-            });
-        }
-
-        async function onTurmaSelected() {
-            const id = turmaSelect.value;
-            if (!id) {
-                return;
-            }
-            const turma = await getTurmaById(id);
-            const alunos = parseAlunoList(turma.alunos);
-            const json = alunos.map(nome => ({ nome, conceito: 'C' }));
-            jsonData.value = JSON.stringify(json, null, 4);
-            log(`✅ Turma carregada: ${turma.nome}`);
-        }
-
-        async function onUcSelected() {
-            const id = ucSelect.value;
-            if (!id) {
-                return;
-            }
-            const uc = await getUcById(id);
-            diaryLink.value = uc.link_diario || '';
-            log(`✅ UC carregada: ${uc.nome}`);
-        }
-
-        function parseAlunoList(value) {
-            if (!value) return [];
-
             try {
-                const parsed = JSON.parse(value);
-                if (Array.isArray(parsed)) {
-                    return parsed.map(item => {
-                        if (typeof item === 'string') return item.trim();
-                        if (item && typeof item === 'object') return (item.nome || item.name || '').trim();
-                        return '';
-                    }).filter(Boolean);
+                const res = await fetch('/api/ucs');
+                if (!res.ok) throw new Error('Erro na API de UCs');
+                const ucs = await res.json();
+                
+                elements.ucSelect.innerHTML = '<option value="">Selecione uma UC</option>';
+                ucs.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.link_diario; // O valor é o link que o Puppeteer vai usar
+                    opt.textContent = u.nome;
+                    elements.ucSelect.appendChild(opt);
+                });
+                log("✅ UCs sincronizadas com o Banco Neon.");
+            } catch (err) {
+                log("❌ Erro ao buscar UCs: " + err.message, "error");
+            }
+        }
+
+        // --- INICIALIZAÇÃO ---
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            log("Iniciando conexão com o servidor...");
+            
+            // Carrega os dados iniciais
+            await Promise.all([refreshTurmaOptions(), refreshUcOptions()]);
+
+            // Configura os botões de engrenagem (Modais)
+            elements.btnManageTurmas.addEventListener('click', () => {
+                if (typeof openTurmaModal === 'function') {
+                    openTurmaModal(refreshTurmaOptions);
+                } else {
+                    log("Erro: Script modalTurma.js não carregado.", "error");
                 }
-            } catch (error) {
-                // ignora se não for JSON
-            }
+            });
 
-            return value
-                .split(/[\r\n,]+/)
-                .map(item => item.trim())
-                .filter(Boolean);
-        }
+            elements.btnManageUcs.addEventListener('click', () => {
+                if (typeof openUcModal === 'function') {
+                    openUcModal(refreshUcOptions);
+                } else {
+                    log("Erro: Script modalUc.js não carregado.", "error");
+                }
+            });
 
-        btnRun.addEventListener('click', async () => {
-            btnRun.disabled = true;
-            btnRun.innerText = 'EXECUTANDO...';
-            lastLogCount = 0;
-            terminal.innerHTML = '<p>> Iniciando processo...</p>';
-
-            try {
-                const body = {
-                    user: document.getElementById('user').value,
-                    password: document.getElementById('password').value,
-                    diaryLink: diaryLink.value,
-                    avSelection: document.getElementById('avSelection').value,
-                    jsonData: JSON.parse(jsonData.value)
+            // Lógica do Botão Iniciar
+            elements.btnRun.addEventListener('click', async () => {
+                const payload = {
+                    user: elements.user.value,
+                    password: elements.pass.value,
+                    diaryLink: elements.ucSelect.value,
+                    jsonData: elements.turmaSelect.options[elements.turmaSelect.selectedIndex]?.dataset.alunos
                 };
 
-                const res = await fetch('/api/run-conceitos', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-
-                if (!res.ok) {
-                    throw new Error('Falha ao iniciar o robô.');
+                if (!payload.user || !payload.password || !payload.diaryLink || !payload.jsonData) {
+                    alert("Preencha todos os campos e selecione Turma/UC!");
+                    return;
                 }
 
-                const { jobId, position } = await res.json();
-                if (position > 1) {
-                    log(`⏳ Robô ocupado. Você está na posição ${position} da fila.`);
-                    lastQueuePosition = position;
+                try {
+                    elements.btnRun.disabled = true;
+                    elements.btnRun.innerText = 'PROCESSANDO...';
+                    elements.btnCancel.classList.remove('hidden');
+                    
+                    const res = await fetch('/api/run-conceitos', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const data = await res.json();
+                    currentJobId = data.jobId;
+                    pollStatus(currentJobId);
+                } catch (error) {
+                    log("Erro ao iniciar: " + error.message, "error");
+                    resetButtons();
                 }
-                pollStatus(jobId);
-            } catch (error) {
-                btnRun.disabled = false;
-                btnRun.innerText = 'INICIAR ROBÔ';
-                btnCancel.classList.add('hidden');
-                log(`❌ ${error.message}`, 'error');
-            }
-        });
-
-        btnCancel.addEventListener('click', async () => {
-            if (!currentJobId) return;
-            
-            try {
-                btnCancel.disabled = true;
-                const res = await fetch(`/api/cancel/${currentJobId}`, { method: 'POST' });
-                if (res.ok) {
-                    log('⏹️ Cancelamento solicitado. Finalizando...');
-                }
-            } catch (error) {
-                log(`❌ Erro ao cancelar: ${error.message}`, 'error');
-            }
-        });
-
-        btnManageTurmas.addEventListener('click', async () => {
-            await openTurmaModal(async () => {
-                await refreshTurmaOptions();
             });
         });
 
-        btnManageUcs.addEventListener('click', async () => {
-            await openUcModal(async () => {
-                await refreshUcOptions();
-            });
-        });
+        async function pollStatus(jobId) {
+            const interval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/status/${jobId}`);
+                    const data = await res.json();
+                    
+                    elements.terminal.innerHTML = ''; // Limpa para mostrar logs atualizados
+                    data.logs.forEach(m => log(m));
 
-        turmaSelect.addEventListener('change', onTurmaSelected);
-        ucSelect.addEventListener('change', onUcSelected);
-
-        async function initialize() {
-            await Promise.all([refreshTurmaOptions(), refreshUcOptions()]);
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        clearInterval(interval);
+                        resetButtons();
+                        log(data.status === 'completed' ? "🏁 Finalizado com sucesso!" : "⚠️ O robô parou com erros.", data.status === 'completed' ? 'info' : 'error');
+                    }
+                } catch (e) {
+                    clearInterval(interval);
+                }
+            }, 2000);
         }
 
-        initialize();
+        function resetButtons() {
+            elements.btnRun.disabled = false;
+            elements.btnRun.innerText = 'INICIAR ROBÔ';
+            elements.btnCancel.classList.add('hidden');
+        }
     </script>
 </body>
 </html>
