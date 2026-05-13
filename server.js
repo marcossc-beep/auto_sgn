@@ -40,8 +40,7 @@ function scheduleJob(jobId, runner) {
   jobs[jobId] = {
     status: 'queued',
     logs: [],
-    runner,
-    shouldCancel: false
+    runner
   };
   jobQueue.push(jobId);
   const position = jobQueue.length;
@@ -63,28 +62,14 @@ function startNextJob() {
   const addLog = createJobLogger(nextJobId);
   addLog('🤖 Robô liberado. Iniciando processo.');
 
-  const cancellationToken = {
-    shouldCancel: () => job.shouldCancel
-  };
-
-  job.runner(cancellationToken)
+  job.runner()
     .then(() => {
-      if (job.shouldCancel) {
-        job.status = 'cancelled';
-        addLog('⏹️ Operação cancelada pelo usuário.');
-      } else {
-        job.status = 'completed';
-        addLog('✅ Processo finalizado.');
-      }
+      job.status = 'completed';
+      addLog('✅ Processo finalizado.');
     })
     .catch(err => {
-      if (job.shouldCancel) {
-        job.status = 'cancelled';
-        addLog('⏹️ Operação cancelada pelo usuário.');
-      } else {
-        job.status = 'error';
-        addLog(`❌ ERRO: ${err.message}`);
-      }
+      job.status = 'error';
+      addLog(`❌ ERRO: ${err.message}`);
     })
     .finally(() => {
       robotBusy = false;
@@ -117,31 +102,14 @@ fastify.get('/api/status/:jobId', async (request, reply) => {
   };
 });
 
-// Rota para Cancelar Job
-fastify.post('/api/cancel/:jobId', async (request, reply) => {
-  const { jobId } = request.params;
-  const job = jobs[jobId];
-  
-  if (!job) {
-    return reply.code(404).send({ error: 'Job não encontrado' });
-  }
-  
-  if (job.status === 'completed' || job.status === 'error' || job.status === 'cancelled') {
-    return reply.code(400).send({ error: 'Job já finalizou' });
-  }
-  
-  job.shouldCancel = true;
-  return { message: 'Cancelamento solicitado', status: job.status };
-});
-
 // Rota do Robô de Conceitos
 fastify.post('/api/run-conceitos', async (request, reply) => {
   const { user, password, diaryLink, avSelection, jsonData } = request.body;
   const jobId = crypto.randomUUID();
 
-  const runner = (cancellationToken) => {
+  const runner = () => {
     const addLog = createJobLogger(jobId);
-    return runConceitosAutomation({ user, password, diaryLink, avSelection, jsonData, addLog, cancellationToken });
+    return runConceitosAutomation({ user, password, diaryLink, avSelection, jsonData, addLog });
   };
 
   const position = scheduleJob(jobId, runner);
@@ -153,9 +121,9 @@ fastify.post('/api/run-pareceres', async (request, reply) => {
   const { user, password, diaryLink, trSelection } = request.body;
   const jobId = crypto.randomUUID();
 
-  const runner = (cancellationToken) => {
+  const runner = () => {
     const addLog = createJobLogger(jobId);
-    return runPareceresAutomation({ user, password, diaryLink, trSelection, addLog, cancellationToken });
+    return runPareceresAutomation({ user, password, diaryLink, trSelection, addLog });
   };
 
   const position = scheduleJob(jobId, runner);
