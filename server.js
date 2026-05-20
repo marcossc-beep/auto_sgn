@@ -274,3 +274,16 @@ fastify.listen({ port: porta, host: '0.0.0.0' }, function (err, address) {
   }
   console.log(`Servidor rodando em ${address}`);
 });
+
+
+
+
+
+
+
+
+
+
+
+
+

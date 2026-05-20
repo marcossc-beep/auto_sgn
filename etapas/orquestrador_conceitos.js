@@ -31,26 +31,13 @@ export async function runConceitosAutomation({ user, password, diaryLink, avSele
   const sessionCookies = await loginPage.cookies();
   await loginBrowser.close();
 
+  const isProd = process.env.prod === 'true';
 
-  // --- MODO VISÍVEL (Para ver o bot trabalhando) ---
-// const browser = await puppeteer.launch({
-//     headless: false,
-//     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-// });
-
-  // --- MODO INVISÍVEL 
-// No seu login.js, substitua o bloco do puppeteer.launch por este:
-const browser = await puppeteer.launch({
-    headless: "new",
-    // Esta linha abaixo resolve o problema do "não encontrado"
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null, 
-    args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-    ],
-});
+  const browser = await puppeteer.launch({
+    headless: isProd, // Aplica a lógica aqui também
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
+  
 
   const page = await browser.newPage();
   await page.setViewport({ width: 1680, height: 1050 });
@@ -75,7 +62,7 @@ const browser = await puppeteer.launch({
       const cells = Array.from(document.querySelectorAll("th, td"));
       for (const cell of cells) {
         if (cell.innerText.toUpperCase().includes(upper)) {
-          const pencil = cell.querySelector(".fa-pencil, .fa-edit, .fa-pencil-square-o, [class*='pencil'], button");
+          const pencil = cell.querySelector(".fa-pencil, .fa-edit, [class*='pencil'], button");
           if (pencil) pencil.click();
         }
       }
@@ -93,8 +80,7 @@ const browser = await puppeteer.launch({
       log(`\n📄 Verificando alunos na Página ${paginaAtual}...`);
 
       for (const aluno of jsonData) {
-        checkCancellation();
-        // Verifica se o aluno está na tela
+        // Verifica o status do aluno na tela antes de qualquer ação
         const statusAluno = await page.evaluate((nome) => {
           const rows = Array.from(document.querySelectorAll("#formHabilidadesCapacidades\\:dtHabilidadesCapacidades_data tr"));
           const row = rows.find(r => r.innerText.includes(nome));
@@ -109,7 +95,12 @@ const browser = await puppeteer.launch({
 
         if (statusAluno === "nao_encontrado") continue;
 
-        // Sempre processar alunos no JSON, independentemente do status
+        if (statusAluno === "avaliado") {
+          log(`   ⏭️ Pulando: ${aluno.nome} (Já possui o check de avaliado)`);
+          continue;
+        }
+
+        // Se chegou aqui, o status é "pendente"
         log(`   👤 Processando: ${aluno.nome} → ${aluno.conceito}`);
 
         try {

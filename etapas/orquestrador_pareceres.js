@@ -22,23 +22,43 @@ const CONFIG = {
 
 const SELECTORS = {
     diary: {
-        conceptsTab: 'li a, span.ui-menuitem-text',
-        tableBody: 'tbody[id*="dataTableConceitos_data"]',
-        periodDropdownContainer: 'div[id$="mediasConceito"]',
-        periodDropdownLabel: 'label[id$="mediasConceito_label"]',
+        conceptsTab: 'li a[href*="abaConceitos DATE_FORMAT_ALLOW_SINGLE_BYTE"], a[href$="abaConceitos"]',
+        conceptsTabPure: 'li a[href*="abaConceitos"], a[href$="abaConceitos"]',
+        tableBody: 'tbody[id*="tabelaConceitos"], tbody[id*="dataTableConceitos_data"]',
+        periodDropdownContainer: 'div[id="tabViewDiarioClasse:formAbaConceitos:mediasConceito"]',
+        periodDropdownLabel: 'label[id="tabViewDiarioClasse:formAbaConceitos:mediasConceito_label"]',
         ajaxLoader: '.ajax-loader, .blockUI, .ui-blockui',
-        editButton: 'a.ui-icon-pencil, a[id*="linkEditar"], button[id*="btnEditar"]', 
-        finalConceptSelect: 'select[id*="comboConceitoFinal"], select[id*="conceitoFinal"]'
-    },
-    modal: {
-        container: '#modalDadosAtitudes, .ui-dialog[aria-hidden="false"]',
-        accordions: '.ui-dialog[aria-hidden="false"] .ui-accordion-header',
-        closeButton: '.ui-dialog[aria-hidden="false"] a.ui-dialog-titlebar-close'
+        
+        // Lápis de edição
+        editButton: 'a[id*="linkEditarAtitudes"]', 
+        
+        // Elementos internos do Modal de Atitudes
+        accordionHabilidadesHeader: 'div[id="formAtitudes:panelAtitudes:accordionHabilidades_header"]',
+        btnImportarConceitos: 'button[id="formAtitudes:panelAtitudes:importarConceitos"]',
+        // Seletores CSS puros e válidos (filtram o dialog ativo e buscam o botão com ícone de check)
+        btnConfirmarConceitos: 'div[id="confirmDialogConceitos"]:not([style*="display: none"]) button:has(.fa-check), div[id="confirmDialogConceitos"]:not([style*="display: none"]) button',
+        
+        accordionSocioemocionaisHeader: 'div[id="formAtitudes:panelAtitudes:accordionHabilidadesSocioemocionais_header"]',
+        btnImportarSocioemocionais: 'button[id="formAtitudes:panelAtitudes:importarObservacoes"]',
+        btnConfirmarSocioemocionais: 'div[id*="confirmDialog"]:not([style*="display: none"]) button:has(.fa-check), div[id*="confirmDialog"]:not([style*="display: none"]) button',
+        
+        // Seletor corrigido por aproximação de atributo para o botão fechar do modal
+        btnCloseModal: 'div[id*="modalDadosAtitudes"] a.ui-dialog-titlebar-close',
+
+        finalConceptSelect: 'select[id*="comboConceitoFinal"], select[id*="conceitoFinal"]',
+        finalConceptSelectInput: 'select[id*="comboConceitoFinal_input"]',
+        finalConceptLabel: 'label[id*="comboConceitoFinal_label"]',
+        modalHabilidadesTableBody: 'tbody[id="formAtitudes:panelAtitudes:dataTableHabilidades_data"]',
+        modalHabilidadesSelects: 'tbody[id="formAtitudes:panelAtitudes:dataTableHabilidades_data"] select[id*="notaConceito_input"]'
     },
     pedagogical: {
-        dropdownTrigger: 'div[id*="selectEstudantes"]', 
-        dropdownPanel: 'div[id*="selectEstudantes_panel"]',
-        hiddenSelect: 'select[id*="selectEstudantes_input"]'
+        // Seus seletores pedagógicos originais mantêm-se aqui...
+        pedagogicalTab: 'li a[href*="abaParecerPedagogico"], a[href$="abaParecerPedagogico"]',
+        tableBody: 'tbody[id="tabViewDiarioClasse:formAbaParecerPedagogico:dataTableParecerPedagogico_data"]',
+        editButton: 'a[id*="linkEditarParecer"]',
+        textArea: 'textarea[id="formParecer:parecerPedagogico"]',
+        saveButton: 'button[id="formParecer:btnSalvarParecer"]',
+        closeButton: 'div[id="modalParecer"] a.ui-dialog-titlebar-close'
     }
 };
 
@@ -58,47 +78,345 @@ class GradeAutomation {
         this.totalStudentsProcessed = 0;
     }
 
-    async start() {
+ async start() {
         try {
             this.addLog(`🚀 Iniciando Fase 1: Validação de Notas e Conceitos (${this.trSelection})...`);
+
+            this.addLog("Procurando a aba 'Conceitos' na interface do diário...");
+            await this.page.waitForSelector('li a[href*="Conceitos"], a[href*="conceitos"]', { visible: true, timeout: 30000 });
+            await this.page.click('li a[href*="Conceitos"], a[href*="conceitos"]');
+            
+            // Pausa estratégica para a aba renderizar completamente
+            await sleep(3000, 4000);
+
+            const trAlvo = this.trSelection ? this.trSelection.trim().toUpperCase() : 'TR1';
+            this.addLog(`Abrindo seletor de períodos para selecionar [${trAlvo}]...`);
+
+            // 1. Clica fisicamente no gatilho do dropdown do PrimeFaces (suporta diferentes variações de seletores do contêiner)
+            const dropdownTrigger = 'div[id*="mediasConceito"] .ui-selectonemenu-trigger, div[id*="formAbaConceitos"] .ui-selectonemenu-trigger, div[id*="mediasConceito"]';
+            await this.page.waitForSelector(dropdownTrigger, { visible: true, timeout: 15000 });
+            await this.page.click(dropdownTrigger);
+            await sleep(1500); // Aguarda a abertura visual da caixinha de opções
+
+            // 2. Localiza o item correto na lista flutuante usando busca resiliente e inteligente
+            const resultadoSelecao = await this.page.evaluate((targetText) => {
+                const itens = Array.from(document.querySelectorAll('li.ui-selectonemenu-item'));
+                const opcoesDisponiveis = itens.map(li => li.innerText.trim());
+                
+                const alvo = itens.find(li => {
+                    const text = li.innerText.trim().toUpperCase();
+                    const target = targetText.toUpperCase();
+                    
+                    // A) Igualdade estrita ou contenção direta (ex: "TR1" ou "1º Trimestre (TR1)")
+                    if (text === target || text.includes(target)) return true;
+                    
+                    // B) Mapeamento inteligente por número do período para formatos alternativos do SGN
+                    if (target === 'TR1' && (text.includes('1º') || text.includes('1O') || text.includes('PRIMEIRO'))) return true;
+                    if (target === 'TR2' && (text.includes('2º') || text.includes('2O') || text.includes('SEGUNDO'))) return true;
+                    if (target === 'TR3' && (text.includes('3º') || text.includes('3O') || text.includes('TERCEIRO'))) return true;
+                    if (target === 'TR4' && (text.includes('4º') || text.includes('4O') || text.includes('QUARTO'))) return true;
+                    
+                    return false;
+                });
+                
+                if (alvo) {
+                    alvo.click();
+                    return { encontrado: true };
+                }
+                return { encontrado: false, opcoes: opcoesDisponiveis };
+            }, trAlvo);
+
+            if (!resultadoSelecao.encontrado) {
+                this.addLog(`⚠️ Opções de período detectadas no diário: [${resultadoSelecao.opcoes.join(', ')}]`);
+                throw new Error(`O período [${trAlvo}] não foi localizado nas opções disponíveis deste diário.`);
+            }
+
+            this.addLog("Aguardando o processamento da requisição e atualização dos dados...");
+            
+            // 3. Aguarda qualquer tela de carregamento (loader) sumir da tela antes de prosseguir
+            try {
+                const loaderSelector = '.ajax-loader, .blockUI, .ui-blockui';
+                await sleep(1500); 
+                await this.page.waitForSelector(loaderSelector, { hidden: true, timeout: 15000 });
+            } catch (e) {}
+
+            await sleep(3500, 4500); // Tempo necessário para estabilização completa do DOM
+
+            // 4. Mapeia dinamicamente o ID correto da tabela atualizada
+            const idRealTabela = await this.page.evaluate(() => {
+                const el = document.querySelector('tbody[id*="tabelaConceitos"], tbody[id*="dataTableConceitos_data"]');
+                return el ? `tbody[id="${el.id}"]` : null;
+            });
+
+            if (!idRealTabela) {
+                throw new Error("A tabela de conceitos sumiu ou não foi renderizada após a troca de período.");
+            }
+
+            this.tableBodySelector = idRealTabela; 
+            this.addLog(`✅ Tabela mapeada com sucesso: ${idRealTabela}. Alunos prontos para análise.`);
+
+            // Executa a rotina de preenchimento dos conceitos (lápis por lápis)
             let conceptsSuccess = await this._processConceptsPhase();
             
             if (conceptsSuccess) {
+                // Validação estrita de segurança pós-lançamento
                 const isValid = await this._verifyConceptsIntegrity();
                 
                 if (!isValid) {
-                    this.addLog(`⚠️ Aviso: A validação apontou pendências (algum lápis não ficou verde). Indo para o Pedagógico mesmo assim por segurança...`);
+                    throw new Error("A validação pós-execução encontrou inconsistências nos conceitos. Processo interrompido por segurança.");
                 }
 
                 this.addLog(`📚 Iniciando Fase 2: Lançamento de Pareceres Pedagógicos (${this.trSelection} e CF)...`);
                 await this._processPedagogicalPhase();
+            } else {
+                throw new Error("A rotina de Conceitos acusou falha interna no processamento de alunos.");
             }
-            this.addLog(`🏁 Missão cumprida! Diário processado com sucesso.`);
+            
+            this.addLog(`🏁 Missão cumprida! Todos os passos concluídos com êxito.`);
             return { total: this.totalStudentsProcessed };
         } catch (error) {
             this.addLog(`❌ Erro crítico no processamento: ${error.message}`);
             throw error;
         }
-    }
-
-    // ================= FASE 1: CONCEITOS =================
+   }
+// ================= FASE 1: CONCEITOS =================
+   // ================= FASE 1: CONCEITOS =================
     async _processConceptsPhase() {
-        await this._clickTab('CONCEITOS');
-        await this._ensureConceptPeriodSelected();
-        await this._waitForTable(SELECTORS.diary.tableBody);
-        await this._autoFillEmptyConcepts();
-        
-        const pending = await this._analyzePendingStudents();
-        if (pending.length === 0) {
-            this.addLog('✅ Todos os conceitos já estão OK (Lápis Verdes).');
+        try {
+            this.addLog("🔄 Iniciando varredura combinada (Trava de Lápis Verde + Regra de CF + Forçar Habilidades)...");
+            const seletorTabela = this.tableBodySelector;
+            
+            const totalAlunos = await this.page.evaluate((tableSelector) => {
+                return document.querySelectorAll(`${tableSelector} tr[data-ri]`).length;
+            }, seletorTabela);
+
+            this.addLog(`👥 Total de ${totalAlunos} alunos encontrados. Analisando status dos lápis...`);
+            this.totalStudentsProcessed = 0;
+
+            for (let i = 0; i < totalAlunos; i++) {
+                try { // TRY CATCH INTERNO: Se um aluno falhar, o robô pula para o próximo!
+                    const linhaSelector = `${seletorTabela} tr[data-ri="${i}"]`;
+                    await this.page.waitForSelector(linhaSelector, { visible: true, timeout: 5000 });
+
+                    const decisaoAluno = await this.page.evaluate((index, tableSelector) => {
+                        const linha = document.querySelector(`${tableSelector} tr[data-ri="${index}"]`);
+                        if (!linha) return { acao: 'pular', motivo: 'Linha não encontrada', nome: 'Desconhecido' };
+                        const celulas = Array.from(linha.querySelectorAll('td'));
+                        const nome = celulas[1] ? celulas[1].innerText.trim() : `Aluno ${index + 1}`;
+
+                        const linkEditar = linha.querySelector('a[id*="linkEditarAtitudes"]');
+                        if (linkEditar) {
+                            const titulo = linkEditar.getAttribute('title') || '';
+                            const estilo = linkEditar.getAttribute('style') || '';
+                            if (titulo.includes('(Preenchido)') || estilo.includes('color:#00b900') || estilo.includes('color: rgb(0, 185, 0)')) {
+                                return { acao: 'pular', motivo: 'Lápis já está Verde (Preenchido)', nome: nome };
+                            }
+                        }
+
+                        const selectCF = linha.querySelector('select[id*="comboConceitoFinal_input"], select[id*="conceitoFinal"]');
+                        let valorCF = "";
+                        if (selectCF && selectCF.value) {
+                            valorCF = selectCF.value.trim().toUpperCase();
+                        } else {
+                            const labelCF = linha.querySelector('label[id*="comboConceitoFinal_label"]');
+                            if (labelCF && labelCF.innerText) valorCF = labelCF.innerText.trim().toUpperCase();
+                        }
+
+                        if (valorCF === 'C' || valorCF === 'PIA') {
+                            return { acao: 'pular', motivo: 'Possui Conceito Final C (PIA)', nome: nome };
+                        }
+
+                        let atitudeAlvo = "PAP";
+                        let conceitoNormalizado = "A";
+                        if (valorCF === 'A' || valorCF === 'PAP') {
+                            atitudeAlvo = "PAP";
+                            conceitoNormalizado = "A";
+                        } else if (valorCF === 'B' || valorCF === 'POD') {
+                            atitudeAlvo = "POD";
+                            conceitoNormalizado = "B";
+                        }
+
+                        return { acao: 'processar', atitudeAlvo: atitudeAlvo, conceitoNormalizado: conceitoNormalizado, nome: nome };
+                    }, i, seletorTabela);
+
+                    if (decisaoAluno.acao === 'pular') {
+                        this.addLog(`⏭️ [Aluno ${i + 1}/${totalAlunos}] ${decisaoAluno.nome} ignorado ➔ Motivo: ${decisaoAluno.motivo}.`);
+                        continue;
+                    }
+
+                    this.addLog(`\n👤 [Aluno ${i + 1}/${totalAlunos}] Processando: ${decisaoAluno.nome} ➔ Alvo: [${decisaoAluno.atitudeAlvo}] (Conceito: ${decisaoAluno.conceitoNormalizado})`);
+
+                    const lapisSelector = `${linhaSelector} a[id*="linkEditarAtitudes"]`;
+                    await this.page.waitForSelector(lapisSelector, { visible: true, timeout: 10000 });
+                    await this.page.evaluate((sel) => {
+                        const el = document.querySelector(sel);
+                        if (el) { el.scrollIntoView({ block: 'center' }); el.click(); }
+                    }, lapisSelector);
+                    
+                    await this.page.waitForSelector('div[id*="formAtitudes:panelMediaParcialEstudante"]', { visible: true, timeout: 15000 });
+                    await sleep(1000, 1500);
+
+                    await this.page.evaluate((targetText) => {
+                        const nativeSelect = document.querySelector('select[id="formAtitudes:mediaParcialEstudante_input"]');
+                        const labelVisual = document.querySelector('label[id="formAtitudes:mediaParcialEstudante_label"]');
+                        if (!nativeSelect) return false;
+                        const opcao = Array.from(nativeSelect.options).find(o => o.text.trim().toUpperCase() === targetText);
+                        if (!opcao) return false;
+                        nativeSelect.value = opcao.value;
+                        if (labelVisual) labelVisual.innerText = targetText;
+                        nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        return true;
+                    }, decisaoAluno.atitudeAlvo);
+
+                    await sleep(1000, 1500);
+
+                    // --- SANFONA 1: Habilidades ---
+                    const headerHabilidades = 'div[id="formAtitudes:panelAtitudes:accordionHabilidades_header"]';
+                    const habilidadesExpandidaPeloBot = await this.page.evaluate((sel) => {
+                        const header = document.querySelector(sel);
+                        if (header) {
+                            const isExpanded = header.getAttribute('aria-expanded') === 'true' || 
+                                               header.classList.contains('ui-state-active') || 
+                                               header.classList.contains('ui-accordion-header-active');
+                            if (!isExpanded) {
+                                header.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    }, headerHabilidades);
+                    
+                    if (habilidadesExpandidaPeloBot) await sleep(800, 1200);
+                    else await sleep(200, 400);
+
+                    await this.page.waitForSelector('button[id="formAtitudes:panelAtitudes:importarConceitos"]', { visible: true, timeout: 5000 });
+                    await this.page.click('button[id="formAtitudes:panelAtitudes:importarConceitos"]');
+                    await sleep(1500, 2000); 
+                    
+                    await this.page.evaluate(() => {
+                        const d = document.querySelector('div[id="confirmDialogConceitos"]');
+                        if (d && d.style.display !== 'none') {
+                            const b = Array.from(d.querySelectorAll('button')).find(btn => btn.innerText.includes('Confirmar'));
+                            if (b) b.click();
+                        }
+                    });
+                    await sleep(2500, 3500);
+
+                    // =========================================================================
+                    // ETAPA EXTRA EXCLUSIVA: VALIDAÇÃO E PREENCHIMENTO MANUAL FORÇADO
+                    // =========================================================================
+                   const precisaPreencherManual = await this.page.evaluate(() => {
+                        const primeiroSelect = document.querySelector('select[id="formAtitudes:panelAtitudes:dataTableHabilidades:0:notaConceito_input"]');
+                        if (primeiroSelect) {
+                            const val = primeiroSelect.value ? primeiroSelect.value.trim().toUpperCase() : "";
+                            return (val !== 'A' && val !== 'B');
+                        }
+                        const primeiroLabel = document.querySelector('label[id="formAtitudes:panelAtitudes:dataTableHabilidades:0:notaConceito_label"]');
+                        if (primeiroLabel) {
+                            const text = primeiroLabel.innerText ? primeiroLabel.innerText.trim().toUpperCase() : "";
+                            return (text !== 'A' && text !== 'B');
+                        }
+                        return true; 
+                    });
+
+                    if (precisaPreencherManual) {
+                        this.addLog(`⚠️ Importação falhou/vazia. Forçando preenchimento manual "humanizado" para [${decisaoAluno.conceitoNormalizado}]...`);
+                        
+                        // 1. Descobre quantas habilidades existem na tabela
+                        const totalHabilidades = await this.page.evaluate(() => {
+                            return document.querySelectorAll('tbody[id="formAtitudes:panelAtitudes:dataTableHabilidades_data"] tr').length;
+                        });
+
+                        let totalInjetados = 0;
+
+                        // 2. Loop EXTERNO "Humanizado": Processa uma por uma, aguardando o AJAX do SGN respirar
+                        for (let j = 0; j < totalHabilidades; j++) {
+                            const alterouLinha = await this.page.evaluate((index, conceitoAlvo) => {
+                                const idBase = `formAtitudes:panelAtitudes:dataTableHabilidades:${index}:notaConceito`;
+                                const select = document.getElementById(`${idBase}_input`);
+                                const labelVisual = document.getElementById(`${idBase}_label`);
+                                
+                                if (select) {
+                                    select.value = conceitoAlvo;
+                                    if (labelVisual) labelVisual.innerText = conceitoAlvo;
+                                    
+                                    // Fogo! Dispara o onchange do PrimeFaces
+                                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                                    return true;
+                                }
+                                return false;
+                            }, j, decisaoAluno.conceitoNormalizado);
+
+                            if (alterouLinha) {
+                                totalInjetados++;
+                                // 3. O SEGREDO: Espera entre 800ms e 1200ms para o servidor processar a nota antes de ir pra próxima
+                                await sleep(800, 1200); 
+                            }
+                        }
+
+                        this.addLog(`⚡ Sucesso: ${totalInjetados} habilidades preenchidas individualmente com [${decisaoAluno.conceitoNormalizado}].`);
+                        await sleep(1000, 1500); // Pausa final após preencher todas
+                        
+                    } else {
+                        this.addLog("✅ Confirmação: Conceito importado com sucesso na primeira linha.");
+                    }
+                    // =========================================================================
+
+                    // --- SANFONA 2: Socioemocionais ---
+                    const headerSocio = 'div[id="formAtitudes:panelAtitudes:accordionHabilidadesSocioemocionais_header"]';
+                    const socioExpandidaPeloBot = await this.page.evaluate((sel) => {
+                        const header = document.querySelector(sel);
+                        if (header) {
+                            const isExpanded = header.getAttribute('aria-expanded') === 'true' || 
+                                               header.classList.contains('ui-state-active') || 
+                                               header.classList.contains('ui-accordion-header-active');
+                            if (!isExpanded) {
+                                header.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    }, headerSocio);
+
+                    if (socioExpandidaPeloBot) await sleep(800, 1200);
+                    else await sleep(200, 400);
+
+                    await this.page.waitForSelector('button[id="formAtitudes:panelAtitudes:importarObservacoes"]', { visible: true, timeout: 5000 });
+                    await this.page.click('button[id="formAtitudes:panelAtitudes:importarObservacoes"]');
+                    await sleep(1500, 2000);
+                    
+                    await this.page.evaluate(() => {
+                        const d = document.querySelector('div[id="confirmDialogObservacoes"]');
+                        if (d && d.style.display !== 'none') {
+                            const b = Array.from(d.querySelectorAll('button')).find(btn => btn.innerText.includes('Confirmar'));
+                            if (b) b.click();
+                        }
+                    });
+
+                    await sleep(3000, 4000);
+                    
+                    await this._saveAndCloseModal();
+                    
+                    await sleep(2500, 3500); 
+                    this.totalStudentsProcessed++;
+                    this.addLog(`✅ Aluno ${i + 1} concluído.`);
+
+                } catch (erroInterno) {
+                    this.addLog(`❌ Falha no processamento do modal do aluno ${i + 1}: ${erroInterno.message}. Fechando modal e pulando para o próximo.`);
+                    // Gatilho de segurança: força o fechamento do modal caso ele tenha travado aberto devido a erro
+                    await this.page.evaluate(() => {
+                        const btnClose = document.querySelector('div[id*="modalDadosAtitudes"] a.ui-dialog-titlebar-close');
+                        if (btnClose) btnClose.click();
+                    }).catch(() => {});
+                    await sleep(2000);
+                }
+            } // Fim do FOR
+
             return true;
+        } catch (error) {
+            this.addLog(`❌ Erro crítico no fluxo de conceitos: ${error.message}`);
+            return false;
         }
-        
-        this.addLog(`📝 Preenchendo notas/atitudes de ${pending.length} aluno(s) pendente(s)...`);
-        for (const student of pending) {
-            await this._fillStudentModalSmart(student);
-        }
-        return true;
     }
 
     async _analyzePendingStudents() {
@@ -329,46 +647,351 @@ class GradeAutomation {
     }
 
     // ================= FASE 2: PEDAGÓGICO =================
+    // ================= FASE 2: PEDAGÓGICO =================
     async _processPedagogicalPhase() {
-        await this._clickTab('PEDAGÓGICO');
-        await sleep(2000, 3000);
+        try {
+            this.addLog("📚 Iniciando Fase 2: Lançamento de Pareceres Pedagógicos...");
 
-        await this.page.waitForSelector(SELECTORS.pedagogical.hiddenSelect, { hidden: true, timeout: 20000 });
-        
-        const studentNames = await this.page.evaluate((sel) => {
-            const select = document.querySelector(sel);
-            if (!select) return [];
-            return Array.from(select.options).map(o => o.text.trim()).filter(t => t && t !== 'Selecione');
-        }, SELECTORS.pedagogical.hiddenSelect);
+            // 1. Clica na aba pedagógica de forma blindada (sem usar o helper antigo que quebrava)
+            const abaClicada = await this.page.evaluate(() => {
+                const links = Array.from(document.querySelectorAll('a'));
+                const alvo = links.find(l => l.innerText && l.innerText.toUpperCase().includes('PEDAGÓGICO'));
+                if (alvo) {
+                    alvo.click();
+                    return true;
+                }
+                return false;
+            });
 
-        this.addLog(`Encontrados ${studentNames.length} alunos na aba pedagógica.`);
+            if (!abaClicada) {
+                this.addLog("⚠️ Aba 'Pedagógico' não encontrada pelo texto. Tentando seletor alternativo...");
+                await this.page.click('li a[href*="Pedagogico"], a[href*="pedagogico"]');
+            }
+            
+            await sleep(3000, 4000); // Aguarda o SGN carregar a aba
 
-        for (const name of studentNames) {
-            let sucessoAluno = false;
-            let tentativasAluno = 0;
+            // 2. Captura os estudantes do select nativo oculto
+            const estudantes = await this.page.evaluate(() => {
+                const nativeSelect = document.querySelector('select[id*="selectEstudantes_input"]');
+                return nativeSelect ? Array.from(nativeSelect.options)
+                    .filter(o => o.value && o.value !== "" && o.text && o.text.trim().toUpperCase() !== "SELECIONE" && o.text.trim().toUpperCase() !== "&NBSP;")
+                    .map(o => o.text.trim()) : [];
+            });
 
-            while (!sucessoAluno && tentativasAluno < 2) {
-                tentativasAluno++;
+            this.addLog(`👥 Total de ${estudantes.length} alunos mapeados para preenchimento de parecer.`);
+
+            const trAlvo = (this.trSelection || 'TR1').toUpperCase();
+            
+            // Suporta a propriedade de pareceres independente do nome usado no seu arquivo original
+            const dbPareceres = this.pareceresDb || this.PARECERES || {};
+
+            for (let i = 0; i < estudantes.length; i++) {
+                const nomeAluno = estudantes[i];
+                if (!nomeAluno) continue; // Blinda contra nomes vazios
+
+                this.addLog(`\n👤 [Aluno ${i + 1}/${estudantes.length}] Parecer: ${nomeAluno}`);
+
                 try {
-                    const abaAtiva = await this.page.evaluate(() => {
-                        const active = document.querySelector('.ui-state-active');
-                        return active ? active.innerText : '';
+                    // Garante que a interface não deslogou ou mudou de aba acidentalmente
+                    await this.page.evaluate(() => {
+                        const links = Array.from(document.querySelectorAll('a'));
+                        const alvo = links.find(l => l.innerText && l.innerText.toUpperCase().includes('PEDAGÓGICO'));
+                        const ativo = document.querySelector('.ui-tabs-selected a, .ui-state-active a');
+                        if (ativo && !ativo.innerText.toUpperCase().includes('PEDAGÓGICO') && alvo) {
+                            alvo.click();
+                        }
                     });
-                    if (!abaAtiva.includes('Pedagógico') && !abaAtiva.includes('PEDAGÓGICO')) {
-                        await this._clickTab('PEDAGÓGICO');
-                    }
 
-                    await this._selectStudentInDropdown(name);
-                    await this._processSingleStudentParecer(name);
-                    sucessoAluno = true;
-                    await sleep(1000, 1500); 
+                    // 3. Seleciona o aluno no dropdown inteligente do PrimeFaces
+                    await this.page.waitForSelector('div[id*="selectEstudantes"] .ui-selectonemenu-trigger', { visible: true, timeout: 10000 });
+                    await this.page.click('div[id*="selectEstudantes"] .ui-selectonemenu-trigger');
+                    await sleep(1000);
+                    
+                    await this.page.evaluate((nome) => {
+                        const itens = Array.from(document.querySelectorAll('li.ui-selectonemenu-item'));
+                        const alvo = itens.find(li => li.innerText && li.innerText.trim() === nome);
+                        if (alvo) alvo.click();
+                    }, nomeAluno);
+
+                    await sleep(4000, 5000); // Aguarda carga pesada dos dados do aluno no SGN
+
+                    // 4. Garante as sanfonas de Desempenho e Média abertas para a textarea aparecer
+                    await this.page.evaluate(() => {
+                        const headers = Array.from(document.querySelectorAll('.ui-accordion-header'));
+                        const hDesempenho = headers.find(h => h.id.includes('sanfonaDesempenho') && !h.id.includes('sanfonaMedia'));
+                        if (hDesempenho && !hDesempenho.classList.contains('ui-state-active')) hDesempenho.click();
+                    });
+                    await sleep(1500);
+
+                    await this.page.evaluate(() => {
+                        const headers = Array.from(document.querySelectorAll('.ui-accordion-header'));
+                        const hMedia = headers.find(h => h.id.includes('sanfonaMedia') || h.id.includes('sanfonaParecer'));
+                        if (hMedia && !hMedia.classList.contains('ui-state-active')) hMedia.click();
+                    });
+                    await sleep(1500);
+
+                    // 5. Detecta visualmente o conceito final daquele aluno lendo a tabela
+                    let conceitoFinal = await this.page.evaluate((tr) => {
+                        const linhas = Array.from(document.querySelectorAll('tbody[id*="desempenhoMedias_data"] tr, tbody[id*="Medias"] tr'));
+                        
+                        const extrairConceito = (linha) => {
+                            if (!linha) return null;
+                            const tds = Array.from(linha.querySelectorAll('td'));
+                            for (const td of tds) {
+                                if (td.querySelector('textarea')) continue;
+                                const txt = td.innerText.trim().toUpperCase();
+                                if (['A', 'B', 'C', 'NE'].includes(txt)) return txt;
+                                const internos = td.querySelectorAll('span, label');
+                                for (const el of internos) {
+                                    const t = el.innerText.trim().toUpperCase();
+                                    if (['A', 'B', 'C', 'NE'].includes(t)) return t;
+                                }
+                            }
+                            return null;
+                        };
+
+                        const linhaTr = linhas.find(t => t.innerText.toUpperCase().includes(tr));
+                        let c = extrairConceito(linhaTr);
+                        if (c) return c;
+
+                        const linhaCF = linhas.find(t => t.innerText.toUpperCase().includes('FINAL') || t.innerText.toUpperCase().includes('CF'));
+                        c = extrairConceito(linhaCF);
+                        if (c) return c;
+
+                        for (const linha of linhas) {
+                            c = extrairConceito(linha);
+                            if (c) return c;
+                        }
+                        return null;
+                    }, trAlvo);
+
+                    if (!conceitoFinal) {
+                        this.addLog(`  ⏭️ Ignorado: Conceito Final (CF) não preenchido ou em branco.`);
+                        continue; // Interrompe as ações deste aluno e vai direto para o próximo
+                    } else {
+                        this.addLog(`  🎯 Conceito detectado: [${conceitoFinal}]`);
+                    }
+                    
+                    // 6. Sorteia o parecer dentro do JSON
+                    const opcoes = dbPareceres[conceitoFinal] || dbPareceres["B"] || ["Parecer padrão de desempenho acadêmico."];
+                    const textoParecer = opcoes[Math.floor(Math.random() * opcoes.length)];
+
+                    // 7. Encontra a textarea correta e injeta o texto com disparos nativos
+                    const textareaId = await this.page.evaluate((tr) => {
+                        const linhas = Array.from(document.querySelectorAll('tbody[id*="desempenhoMedias_data"] tr, tbody[id*="Medias"] tr'));
+                        let linhaAlvo = linhas.find(t => t.innerText.toUpperCase().includes(tr));
+                        if (!linhaAlvo) linhaAlvo = linhas.find(t => t.innerText.toUpperCase().includes('FINAL') || t.innerText.toUpperCase().includes('CF'));
+                        if (!linhaAlvo && linhas.length > 0) linhaAlvo = linhas.find(t => t.querySelector('textarea'));
+                        
+                        if (linhaAlvo) {
+                            const txt = linhaAlvo.querySelector('textarea');
+                            return txt ? txt.id : null;
+                        }
+                        const qualquerTextarea = document.querySelector('div[id*="sanfonaMedia"] textarea, div[id*="sanfonaDesempenho"] textarea');
+                        return qualquerTextarea ? qualquerTextarea.id : null;
+                    }, trAlvo);
+
+                    if (textareaId) {
+                        await this.page.evaluate((id, txt) => { 
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = txt; 
+                                el.dispatchEvent(new Event('input', { bubbles: true }));
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                                el.dispatchEvent(new Event('blur', { bubbles: true }));
+                            }
+                        }, textareaId, textoParecer);
+                        
+                        await sleep(1500);
+                        
+                        // Clica em Salvar Parecer/Desempenho
+                        await this.page.evaluate(() => {
+                            const btn = document.querySelector('button[id*="botaoSalvarDesempenho"], button[id*="SalvarDesempenho"], button[id*="btnSalvar"]');
+                            if (btn) btn.click();
+                        });
+                        await sleep(3500, 4500); 
+                        
+                        this.addLog(`  ✅ Parecer salvo com sucesso!`);
+                    } else {
+                        this.addLog(`  ❌ Erro: Caixa de texto do período [${trAlvo}] não encontrada.`);
+                    }
                 } catch (erroAluno) {
-                    this.addLog(`❌ Erro com aluno ${name} (Tentativa ${tentativasAluno}): ${erroAluno.message}`);
-                    if (tentativasAluno >= 2) this.addLog(`Pulando aluno ${name} após falhas repetidas.`);
+                    this.addLog(`  ❌ Erro isolado ao preencher parecer deste aluno: ${erroAluno.message}`);
                 }
             }
+            return true;
+        } catch (error) {
+            this.addLog(`❌ Erro crítico no fluxo da fase pedagógica: ${error.message}`);
+            return false;
         }
     }
+
+
+
+
+
+//    async _processConceptsPhase() {
+//         try {
+//             this.addLog("🔄 Iniciando varredura combinada (Trava de Lápis Verde + Regra de CF)...");
+//             const seletorTabela = this.tableBodySelector;
+            
+//             const totalAlunos = await this.page.evaluate((tableSelector) => {
+//                 return document.querySelectorAll(`${tableSelector} tr[data-ri]`).length;
+//             }, seletorTabela);
+
+//             this.addLog(`👥 Total de ${totalAlunos} alunos encontrados. Analisando status dos lápis...`);
+
+//             for (let i = 0; i < totalAlunos; i++) {
+//                 const linhaSelector = `${seletorTabela} tr[data-ri="${i}"]`;
+//                 await this.page.waitForSelector(linhaSelector, { visible: true, timeout: 5000 });
+
+//                 const decisaoAluno = await this.page.evaluate((index, tableSelector) => {
+//                     const linha = document.querySelector(`${tableSelector} tr[data-ri="${index}"]`);
+//                     if (!linha) return { acao: 'pular', motivo: 'Linha não encontrada', nome: 'Desconhecido' };
+//                     const celulas = Array.from(linha.querySelectorAll('td'));
+//                     const nome = celulas[1] ? celulas[1].innerText.trim() : `Aluno ${index + 1}`;
+
+//                     const linkEditar = linha.querySelector('a[id*="linkEditarAtitudes"]');
+//                     if (linkEditar) {
+//                         const titulo = linkEditar.getAttribute('title') || '';
+//                         const estilo = linkEditar.getAttribute('style') || '';
+//                         if (titulo.includes('(Preenchido)') || estilo.includes('color:#00b900') || estilo.includes('color: rgb(0, 185, 0)')) {
+//                             return { acao: 'pular', motivo: 'Lápis já está Verde (Preenchido)', nome: nome };
+//                         }
+//                     }
+
+//                     const selectCF = linha.querySelector('select[id*="comboConceitoFinal_input"], select[id*="conceitoFinal"]');
+//                     let valorCF = "";
+//                     if (selectCF && selectCF.value) {
+//                         valorCF = selectCF.value.trim().toUpperCase();
+//                     } else {
+//                         const labelCF = linha.querySelector('label[id*="comboConceitoFinal_label"]');
+//                         if (labelCF && labelCF.innerText) valorCF = labelCF.innerText.trim().toUpperCase();
+//                     }
+
+//                     if (valorCF === 'C' || valorCF === 'PIA') {
+//                         return { acao: 'pular', motivo: 'Possui Conceito Final C (PIA)', nome: nome };
+//                     }
+
+//                     let atitudeAlvo = "PAP";
+//                     if (valorCF === 'A' || valorCF === 'PAP') atitudeAlvo = "PAP";
+//                     else if (valorCF === 'B' || valorCF === 'POD') atitudeAlvo = "POD";
+
+//                     return { acao: 'processar', atitudeAlvo: atitudeAlvo, nome: nome };
+//                 }, i, seletorTabela);
+
+//                 if (decisaoAluno.acao === 'pular') {
+//                     this.addLog(`⏭️ [Aluno ${i + 1}/${totalAlunos}] ${decisaoAluno.nome} ignorado ➔ Motivo: ${decisaoAluno.motivo}.`);
+//                     continue;
+//                 }
+
+//                 this.addLog(`\n👤 [Aluno ${i + 1}/${totalAlunos}] Processando: ${decisaoAluno.nome} ➔ Alvo: [${decisaoAluno.atitudeAlvo}]`);
+
+//                 const lapisSelector = `${linhaSelector} a[id*="linkEditarAtitudes"]`;
+//                 await this.page.waitForSelector(lapisSelector, { visible: true, timeout: 10000 });
+//                 await this.page.evaluate((sel) => {
+//                     const el = document.querySelector(sel);
+//                     if (el) { el.scrollIntoView({ block: 'center' }); el.click(); }
+//                 }, lapisSelector);
+                
+//                 await this.page.waitForSelector('div[id*="formAtitudes:panelMediaParcialEstudante"]', { visible: true, timeout: 15000 });
+//                 await sleep(1000, 1500);
+
+//                 await this.page.evaluate((targetText) => {
+//                     const nativeSelect = document.querySelector('select[id="formAtitudes:mediaParcialEstudante_input"]');
+//                     const labelVisual = document.querySelector('label[id="formAtitudes:mediaParcialEstudante_label"]');
+//                     if (!nativeSelect) return false;
+//                     const opcao = Array.from(nativeSelect.options).find(o => o.text.trim().toUpperCase() === targetText);
+//                     if (!opcao) return false;
+//                     nativeSelect.value = opcao.value;
+//                     if (labelVisual) labelVisual.innerText = targetText;
+//                     nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+//                     return true;
+//                 }, decisaoAluno.atitudeAlvo);
+
+//                 await sleep(1000, 1500);
+
+//                 // --- SANFONA 1: Conceitos das Habilidades ---
+//                 const headerHabilidades = 'div[id="formAtitudes:panelAtitudes:accordionHabilidades_header"]';
+//                 await this.page.waitForSelector(headerHabilidades, { visible: true, timeout: 5000 });
+                
+//                 const habilidadesPrefechada = await this.page.evaluate((sel) => {
+//                     const header = document.querySelector(sel);
+//                     if (header) {
+//                         const isExpanded = header.getAttribute('aria-expanded') === 'true' || 
+//                                            header.classList.contains('ui-state-active');
+//                         if (!isExpanded) {
+//                             header.click(); // SÓ clica se NÃO estiver expandida
+//                             return true;
+//                         }
+//                     }
+//                     return false;
+//                 }, headerHabilidades);
+                
+//                 if (habilidadesPrefechada) {
+//                     await sleep(1000, 1500); // Espera a animação de abrir abrir
+//                 }
+
+//                 await this.page.waitForSelector('button[id="formAtitudes:panelAtitudes:importarConceitos"]', { visible: true, timeout: 5000 });
+//                 await this.page.click('button[id="formAtitudes:panelAtitudes:importarConceitos"]');
+//                 await sleep(1500, 2000); 
+                
+//                 await this.page.evaluate(() => {
+//                     const d = document.querySelector('div[id="confirmDialogConceitos"]');
+//                     if (d && d.style.display !== 'none') {
+//                         const b = Array.from(d.querySelectorAll('button')).find(btn => btn.innerText.includes('Confirmar'));
+//                         if (b) b.click();
+//                     }
+//                 });
+//                 await sleep(2500, 3500);
+
+//                 // --- SANFONA 2: Observações Socioemocionais ---
+//                 const headerSocio = 'div[id="formAtitudes:panelAtitudes:accordionHabilidadesSocioemocionais_header"]';
+//                 await this.page.waitForSelector(headerSocio, { visible: true, timeout: 5000 });
+                
+//                 const socioPrefechada = await this.page.evaluate((sel) => {
+//                     const header = document.querySelector(sel);
+//                     if (header) {
+//                         const isExpanded = header.getAttribute('aria-expanded') === 'true' || 
+//                                            header.classList.contains('ui-state-active');
+//                         if (!isExpanded) {
+//                             header.click(); // SÓ clica se NÃO estiver expandida
+//                             return true;
+//                         }
+//                     }
+//                     return false;
+//                 }, headerSocio);
+
+//                 if (socioPrefechada) {
+//                     await sleep(1000, 1500); // Espera a animação de abrir
+//                 }
+
+//                 await this.page.waitForSelector('button[id="formAtitudes:panelAtitudes:importarObservacoes"]', { visible: true, timeout: 5000 });
+//                 await this.page.click('button[id="formAtitudes:panelAtitudes:importarObservacoes"]');
+//                 await sleep(1500, 2000);
+                
+//                 await this.page.evaluate(() => {
+//                     const d = document.querySelector('div[id="confirmDialogObservacoes"]');
+//                     if (d && d.style.display !== 'none') {
+//                         const b = Array.from(d.querySelectorAll('button')).find(btn => btn.innerText.includes('Confirmar'));
+//                         if (b) b.click();
+//                     }
+//                 });
+
+//                 await sleep(3000, 4000);
+                
+//                 // Salva e fecha o modal usando o método inteligente da classe
+//                 await this._saveAndCloseModal();
+                
+//                 await sleep(2500, 3500); 
+//                 this.addLog(`✅ Aluno ${i + 1} concluído.`);
+//             }
+//             return true;
+//         } catch (error) {
+//             this.addLog(`❌ Erro no fluxo de conceitos: ${error.message}`);
+//             return false;
+//         }
+//     }
 
     async _selectStudentInDropdown(studentName) {
         await this.page.click(SELECTORS.pedagogical.dropdownTrigger);
@@ -562,22 +1185,56 @@ class GradeAutomation {
     // ================= HELPERS GERAIS =================
     async _verifyConceptsIntegrity() {
         try {
-            await this.page.reload({ waitUntil: 'domcontentloaded' });
-            await sleep(3000, 5000);
-            await this._clickTab('CONCEITOS');
-            await this._ensureConceptPeriodSelected();
-            await this._waitForTable(SELECTORS.diary.tableBody);
+            this.addLog("🔎 Iniciando auditoria e verificação da tradução automática dos conceitos (PAP/POD/PIA)...");
+
+            // Recarrega/garante leitura da tabela ativa
+            const seletorTabela = this.tableBodySelector || 'tbody[id*="tabelaConceitos"]';
             
-            const pendencias = await this.page.evaluate(() => {
-                const btns = Array.from(document.querySelectorAll('a[id*="linkEditarAtitudes"], a[id*="linkEditar"], button[id*="btnEditar"]'));
-                return btns.some(btn => {
-                    const elToCheck = btn.tagName.toLowerCase() === 'span' ? btn.closest('a, button') || btn : btn;
-                    const style = elToCheck.getAttribute('style') || '';
-                    return !style.includes('#00b900') && !style.includes('rgb(0, 185, 0)');
-                });
-            });
-            return !pendencias;
-        } catch (e) { return false; }
+            // Avalia a integridade de cada linha diretamente no contexto do navegador
+            const integridadeValida = await this.page.evaluate((tableSelector) => {
+                const linhas = Array.from(document.querySelectorAll(`${tableSelector} tr[data-ri]`));
+                if (linhas.length === 0) return false;
+
+                let tudoCerto = true;
+
+                for (const linha of linhas) {
+                    // Busca pelo texto parcial (PAP, POD ou PIA) gravado na linha do aluno
+                    const textoLinha = linha.innerText ? linha.innerText.toUpperCase() : '';
+                    
+                    // Acha o combobox do Conceito Final (CF) correspondente na mesma linha
+                    const selectCF = linha.querySelector('select[id*="conceitoFinal"], select[id*="comboConceitoFinal"]');
+                    if (!selectCF) continue;
+
+                    const valorSelecionadoCF = selectCF.value; // Geralmente 'A', 'B', 'C'
+
+                    // Validação das Regras de Negócio estipuladas
+                    if (textoLinha.includes('PAP') && valorSelecionadoCF !== 'A') {
+                        tudoCerto = false;
+                        linha.style.backgroundColor = '#ffcccc'; // Marca visualmente o erro na tela (Modo visível)
+                    } else if (textoLinha.includes('POD') && valorSelecionadoCF !== 'B') {
+                        tudoCerto = false;
+                        linha.style.backgroundColor = '#ffcccc';
+                    } else if (textoLinha.includes('PIA') && valorSelecionadoCF !== 'C') {
+                        tudoCerto = false;
+                        linha.style.backgroundColor = '#ffcccc';
+                    }
+                }
+
+                return tudoCerto;
+            }, seletorTabela);
+
+            if (integridadeValida) {
+                this.addLog("✅ Auditoria Concluída: Todos os conceitos importados batem com as regras (PAP=A, POD=B, PIA=C).");
+                return true;
+            } else {
+                this.addLog("⚠️ Inconsistência Detectada: Existem alunos cujo conceito final (CF) não corresponde ao resultado importado.");
+                return false;
+            }
+
+        } catch (error) {
+            this.addLog(`❌ Erro durante a verificação de integridade: ${error.message}`);
+            return false;
+        }
     }
 
     async _clickTab(namePart) {

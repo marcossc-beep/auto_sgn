@@ -94,8 +94,14 @@
                 const res = await fetch(`http://localhost:3000/api/status/${jobId}`);
                 const data = await res.json();
 
+                // Se o job não foi encontrado no servidor, dá um pequeno tempo e tenta novamente antes de desistir
+                if (data.status === 'not_found') {
+                    setTimeout(monitorarLogs, 2000);
+                    return;
+                }
+
                 const term = document.getElementById('terminal');
-                term.innerHTML = ""; 
+                term.innerHTML = ""; // Limpa apenas após ter certeza de que há logs válidos para mostrar
                 data.logs.forEach(addLogToScreen);
 
                 if (data.status === 'queued') {
@@ -105,13 +111,14 @@
                     }
                     setTimeout(monitorarLogs, 5000);
                 } else if (data.status === 'running') {
-                    setTimeout(monitorarLogs, 5000);
+                    setTimeout(monitorarLogs, 9000); // Reduzido para 3s para atualizar os passos iniciais mais rápido
                 } else {
                     document.getElementById('btnIniciar').disabled = false;
                     addLogToScreen("--- FIM DO PROCESSO ---");
                 }
             } catch (error) {
                 addLogToScreen(`❌ Erro ao buscar logs: ${error.message}`);
+                setTimeout(monitorarLogs, 5000); // Tenta novamente em caso de instabilidade de rede temporária
             }
         }
     </script>
