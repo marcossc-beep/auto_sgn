@@ -27,18 +27,20 @@ export async function realizarLogin(user, password, targetUrl, addLog) {
 
 
     // MODO INVISIVEL    
-const browser = await puppeteer.launch({
-    headless: "new",
-    // Esta linha abaixo resolve o problema do "não encontrado"
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null, 
-    args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-    ],
-});
-
+    const browser = await puppeteer.launch({
+        headless: "new",
+        // Se a variável não existir (como tiramos do Render), ele usa o auto-resolve do Puppeteer
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage', // Evita crash por falta de memória compartilhada no Render
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process' // Otimiza o consumo de RAM no plano gratuito/básico do Render
+        ]
+    });
 
 
     const page = await browser.newPage();
