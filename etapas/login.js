@@ -16,28 +16,28 @@ export async function realizarLogin(user, password, targetUrl, addLog) {
     addLog(`[Login] Iniciando navegador...`);
     
 // MODO VISIVEL
-    const browser = await puppeteer.launch({
-        headless: false,
-        slowMo: 50,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox'
-        ],
-    });
+    // const browser = await puppeteer.launch({
+    //     headless: false,
+    //     slowMo: 50,
+    //     args: [
+    //         '--no-sandbox',
+    //         '--disable-setuid-sandbox'
+    //     ],
+    // });
 
 
     // MODO INVISIVEL    
-// const browser = await puppeteer.launch({
-//     headless: "new",
-//     // Esta linha abaixo resolve o problema do "não encontrado"
-//     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null, 
-//     args: [
-//         '--no-sandbox',
-//         '--disable-setuid-sandbox',
-//         '--disable-dev-shm-usage',
-//         '--disable-gpu'
-//     ],
-// });
+const browser = await puppeteer.launch({
+    headless: "new",
+    // Esta linha abaixo resolve o problema do "não encontrado"
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null, 
+    args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+    ],
+});
 
 
 
