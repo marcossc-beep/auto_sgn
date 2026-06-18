@@ -15,32 +15,30 @@ puppeteer.use(StealthPlugin());
 export async function realizarLogin(user, password, targetUrl, addLog) {
     addLog(`[Login] Iniciando navegador...`);
     
-// MODO VISIVEL
-    // const browser = await puppeteer.launch({
-    //     headless: false,
-    //     slowMo: 50,
-    //     args: [
-    //         '--no-sandbox',
-    //         '--disable-setuid-sandbox'
-    //     ],
-    // });
-
-
-    // MODO INVISIVEL    
-    const browser = await puppeteer.launch({
-        headless: "new",
-        // Se a variável não existir (como tiramos do Render), ele usa o auto-resolve do Puppeteer
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // Evita crash por falta de memória compartilhada no Render
-            '--disable-gpu',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process' // Otimiza o consumo de RAM no plano gratuito/básico do Render
-        ]
-    });
+// MODO DE EXECUÇÃO
+// Controle via variável de ambiente `HEADLESS`:
+// - local/dev: não setar `HEADLESS` (ou definir como 'false') para ver o navegador (útil para debug)
+// - produção/Render: setar `HEADLESS=true` para executar invisível (headless)
+const isHeadless = process.env.HEADLESS === 'false';
+const browser = await puppeteer.launch({
+    headless: isHeadless ? 'new' : false,
+    slowMo: isHeadless ? 0 : 50,
+    // Se precisar fornecer um caminho específico do Chrome no Render, configure PUPPETEER_EXECUTABLE_PATH
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    args: isHeadless ? [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
+    ] : [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--start-maximized'
+    ],
+});
 
 
     const page = await browser.newPage();

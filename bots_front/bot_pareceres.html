@@ -14,96 +14,178 @@
     <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-md border-t-8 border-green-600">
         <a href="/" class="text-blue-500 hover:underline mb-4 inline-block">← Voltar ao Início</a>
         
-        <h1 class="text-2xl font-bold mb-6 text-gray-800"> Lançador Automático de Pareceres</h1>
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">Lançador Automático de Pareceres</h1>
 
         <div class="space-y-4 mb-6">
             <div class="grid grid-cols-2 gap-4">
-                <input type="text" id="usuario" placeholder="Usuário SGN (ex: marcos.sc)" class="p-3 border rounded">
-                <input type="password" id="senha" placeholder="Senha" class="p-3 border rounded">
+                <input type="text" id="usuario" placeholder="Usuário SGN" class="p-3 border rounded w-full">
+                <input type="password" id="senha" placeholder="Senha SGN" class="p-3 border rounded w-full">
             </div>
-            <div class="grid grid-cols-3 gap-4">
-                <input type="text" id="link" placeholder="Cole o link do Diário de Classe aqui" class="col-span-2 p-3 border rounded w-full">
-                <select id="trSelection" class="p-3 border rounded w-full bg-white font-medium text-gray-700">
-                    <option value="TR1">TR1 - Primeiro Trimestre</option>
-                    <option value="TR2">TR2 - Segundo Trimestre</option>
-                    <option value="TR3" selected>TR3 - Terceiro Trimestre</option>
-                </select>
+
+            <div class="grid grid-cols-3 gap-4 items-center">
+                <select id="trSelection" class="p-3 border rounded w-full bg-white">
+    <option value="TR1">1º Trimestre (TR1)</option>
+    <option value="TR2">2º Trimestre (TR2)</option>
+    <option value="TR3">3º Trimestre (TR3)</option>
+</select>
+
+                <div class="col-span-2 bg-gray-50 p-3 rounded-lg border border-gray-200 flex items-center justify-between">
+                    <span class="text-sm font-semibold text-gray-700">Modo de Lançamento:</span>
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggleModo" class="sr-only peer" onchange="alternarModoLinks()">
+                        <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        <span id="labelModo" class="ms-3 text-sm font-medium text-gray-900">Um Diário Único</span>
+                    </label>
+                </div>
             </div>
-            <button id="btnIniciar" onclick="iniciarRobo()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-colors">
-                🚀 Iniciar Lançamento de Pareceres
+
+            <div class="w-full">
+                <div id="containerLinkUnico">
+                    <input type="text" id="link" placeholder="Cole o link do Diário de Classe aqui" class="p-3 border rounded w-full">
+                </div>
+
+                <div id="containerLinksMultiplos" class="hidden">
+                    <p class="text-xs text-gray-500 mb-1 font-semibold">Cole cada link de diário em uma linha nova:</p>
+                    <textarea id="linksMultiplos" rows="4" placeholder="https://sgn.sc.senai.br/...diario1&#10;https://sgn.sc.senai.br/...diario2" class="p-3 border rounded w-full font-mono text-sm"></textarea>
+                </div>
+            </div>
+
+            <button id="btnIniciar" onclick="iniciarRobo()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold p-3 rounded transition duration-200">
+                Iniciar Automação
             </button>
         </div>
 
-        <div id="terminal" class="terminal mt-6 flex flex-col gap-1"></div>
+        <h2 class="text-lg font-semibold mb-2 text-gray-700">Logs de Execução</h2>
+        <div id="terminal" class="terminal">
+            <div class="text-gray-500">[Sistema] Aguardando definição de parâmetros e início do robô...</div>
+        </div>
     </div>
 
     <script>
-        let jobId = null;
+        let currentJobId = null;
         let lastQueuePosition = null;
 
-        function addLogToScreen(msg) {
-            const term = document.getElementById('terminal');
-            const div = document.createElement('div');
-            div.textContent = msg;
-            if(msg.includes('❌') || msg.toLowerCase().includes('erro')) div.className = 'log-error';
-            else if(msg.includes('✅') || msg.includes('🚀')) div.className = 'log-info';
-            term.appendChild(div);
-            term.scrollTop = term.scrollHeight;
+        function alternarModoLinks() {
+            const toggle = document.getElementById('toggleModo');
+            const label = document.getElementById('labelModo');
+            const containerUnico = document.getElementById('containerLinkUnico');
+            const containerMultiplos = document.getElementById('containerLinksMultiplos');
+
+            if (toggle && toggle.checked) {
+                label.innerText = "Múltiplos Diários em Lote";
+                containerUnico.classList.add('hidden');
+                containerMultiplos.classList.remove('hidden');
+            } else {
+                label.innerText = "Um Diário Único";
+                containerUnico.classList.remove('hidden');
+                containerMultiplos.classList.add('hidden');
+            }
         }
 
         async function iniciarRobo() {
+            // IDs corrigidos e validados conforme a estrutura HTML acima
             const user = document.getElementById('usuario').value;
             const password = document.getElementById('senha').value;
-            const diaryLink = document.getElementById('link').value;
-            const trSelection = document.getElementById('trSelection').value; // Captura a escolha do Trimestre
+            const trSelection = document.getElementById('trSelection').value;
+            const toggle = document.getElementById('toggleModo');
+            const toggleModo = toggle ? toggle.checked : false;
+            
+            let diaries = [];
 
-            if (!user || !password || !diaryLink) {
-                alert('Preencha usuário, senha e o link do diário!');
+            if (toggleModo) {
+                const txtArea = document.getElementById('linksMultiplos').value;
+                diaries = txtArea.split('\n')
+                    .map(link => link.trim())
+                    .filter(link => link.length > 0);
+            } else {
+                const inputLink = document.getElementById('link').value.trim();
+                if (inputLink) {
+                    diaries.push(inputLink);
+                }
+            }
+
+            if (!user || !password) {
+                alert("⚠️ Por favor, preencha Usuário e Senha do SGN.");
+                return;
+            }
+
+            if (diaries.length === 0) {
+                alert("⚠️ Adicione pelo menos um link válido de Diário de Classe.");
                 return;
             }
 
             document.getElementById('btnIniciar').disabled = true;
-            document.getElementById('terminal').innerHTML = '';
-            addLogToScreen("⏳ Conectando ao servidor...");
+            const term = document.getElementById('terminal');
+            term.innerHTML = `<div class="log-info">[Sistema] Enviando lote com ${diaries.length} diário(s) para o servidor...</div>`;
 
             try {
-                // Envia o trSelection junto no corpo da requisição (body)
-                const res = await fetch('http://localhost:3000/api/run-pareceres', {
+                const response = await fetch('/api/run-pareceres', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user, password, diaryLink, trSelection })
+                    body: JSON.stringify({
+                        user,
+                        password,
+                        diaries,
+                        trSelection
+                    })
                 });
 
-                if (!res.ok) {
-                    throw new Error(`Erro de rede ou servidor bloqueou: ${res.status}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Erro desconhecido no servidor.');
                 }
 
-                const data = await res.json();
-                jobId = data.jobId;
+                currentJobId = data.jobId;
+                lastQueuePosition = null;
+                
+                term.innerHTML += `<div class="log-info">[Sistema] Automação aceita. ID do Processo: ${currentJobId}</div>`;
+                
                 monitorarLogs();
+
             } catch (error) {
-                addLogToScreen(`❌ Erro ao conectar: ${error.message}. O servidor Node (node server.js) está rodando?`);
+                term.innerHTML += `<div class="log-error">❌ Erro ao iniciar processo: ${error.message}</div>`;
                 document.getElementById('btnIniciar').disabled = false;
             }
         }
 
-        async function monitorarLogs() {
-            if (!jobId) return;
-            
-            try {
-                const res = await fetch(`http://localhost:3000/api/status/${jobId}`);
-                const data = await res.json();
+        function addLogToScreen(msg) {
+            const term = document.getElementById('terminal');
+            const isError = msg.includes('❌') || msg.toLowerCase().includes('erro') || msg.toLowerCase().includes('falha');
+            const className = isError ? 'log-error' : 'log-info';
+            term.innerHTML += `<div class="${className}">${msg}</div>`;
+            term.scrollTop = term.scrollHeight;
+        }
 
-                // Se o job não foi encontrado no servidor, dá um pequeno tempo e tenta novamente antes de desistir
+       async function monitorarLogs() {
+            if (!currentJobId) return;
+
+            try {
+                const response = await fetch(`/api/logs/${currentJobId}`);
+                const data = await response.json();
+
+                // 1. Proteção contra rotas inexistentes ou erros internos do Fastify (ex: 404 ou 500)
+                if (data.error || data.statusCode) {
+                    throw new Error(data.message || "A rota de logs falhou no servidor.");
+                }
+
+                // 2. Se o servidor pediu para aguardar (not_found amigável)
                 if (data.status === 'not_found') {
                     setTimeout(monitorarLogs, 2000);
                     return;
                 }
 
+                // 3. Proteção caso data.logs venha indefinido por algum motivo
+                if (!data.logs || !Array.isArray(data.logs)) {
+                    throw new Error("O formato dos logs retornado pelo servidor é inválido.");
+                }
+
+                // Atualiza o terminal com segurança
                 const term = document.getElementById('terminal');
-                term.innerHTML = ""; // Limpa apenas após ter certeza de que há logs válidos para mostrar
+                term.innerHTML = ""; 
                 data.logs.forEach(addLogToScreen);
 
+                // Gerencia o fluxo baseado no status da fila
                 if (data.status === 'queued') {
                     if (data.position && data.position !== lastQueuePosition) {
                         addLogToScreen(`⏳ Robô ocupado. Você está na posição ${data.position} da fila.`);
@@ -111,14 +193,15 @@
                     }
                     setTimeout(monitorarLogs, 5000);
                 } else if (data.status === 'running') {
-                    setTimeout(monitorarLogs, 9000); // Reduzido para 3s para atualizar os passos iniciais mais rápido
+                    setTimeout(monitorarLogs, 3000); 
                 } else {
                     document.getElementById('btnIniciar').disabled = false;
                     addLogToScreen("--- FIM DO PROCESSO ---");
                 }
             } catch (error) {
-                addLogToScreen(`❌ Erro ao buscar logs: ${error.message}`);
-                setTimeout(monitorarLogs, 5000); // Tenta novamente em caso de instabilidade de rede temporária
+                addLogToScreen(`⚠️ Aviso (Tentando reconectar...): ${error.message}`);
+                // Ao invés de travar, ele continua tentando buscar os logs a cada 5 segundos
+                setTimeout(monitorarLogs, 5000);
             }
         }
     </script>

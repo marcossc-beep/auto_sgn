@@ -1,21 +1,92 @@
---- Início da Execução: 08/04/2026, 14:39:55 ---
-[14:39:55] 🚀 Iniciando Orquestrador 100% PUPPETEER - V13 (Com Verificação de Status)
-[14:39:55] [Login] Iniciando navegador...
-[14:39:55] [Login] Acessando URL inicial: https://sgn.sesisenai.org.br/pages/diarioClasse/diario-classe.html?idDiario=410842
-[14:39:57] [Login] Botão "Entrar com FIESC" detectado. Indo para o IDP...
-[14:40:04] [Login] Preenchendo usuário e senha...
-[14:40:06] [Login] Clicando em Log In e aguardando redirecionamento do IDP...
-[14:40:09] [Login] Aguardando o carregamento da interface do SGN...
-[14:40:19] ✅ Login concluído com sucesso!
-[14:40:20] Navegando para o diário...
-[14:40:25] Abrindo aba CONCEITOS...
-[14:40:30] Clicando no lápis da coluna: AV1
-[14:40:34] ✅ Modal da avaliação aberto!
-[14:40:34] 
+--- Início da Execução: 18/06/2026, 12:51:02 ---
+[12:51:02] 🚀 Iniciando Orquestrador 100% PUPPETEER - V13 (Com Verificação de Status)
+[12:51:02] [Login] Iniciando navegador...
+[12:51:03] [Login] Acessando URL inicial: https://sgn.sesisenai.org.br/pages/diarioClasse/diario-classe.html?idDiario=410836
+[12:51:05] [Login] Botão "Entrar com FIESC" detectado. Indo para o IDP...
+[12:51:14] [Login] Preenchendo usuário e senha...
+[12:51:18] [Login] Clicando em Log In e aguardando redirecionamento do IDP...
+[12:51:23] [Login] Aguardando o carregamento da interface do SGN...
+[12:51:33] ✅ Login concluído com sucesso!
+[12:51:34] Navegando para o diário...
+[12:51:39] Abrindo aba CONCEITOS...
+[12:51:42] 🔎 Selecionando período: TR2
+[12:51:43] ✅ Período TR2 selecionado.
+[12:51:45] Clicando no lápis da coluna: AV1
+[12:51:49] ✅ Modal da avaliação aberto!
+[12:51:49] 
 📄 Verificando alunos na Página 1...
-[14:40:35]    ⏭️ Pulando: Alexandre Bassoli de Castro (Já possui o check de avaliado)
-[14:40:35]    ⏭️ Pulando: Arthur Alexandre Furlanetto (Já possui o check de avaliado)
-[14:40:35]    ⏭️ Pulando: Augusto Búrigo Locks (Já possui o check de avaliado)
-[14:40:35]    ⏭️ Pulando: Bernardo Marçal Costa (Já possui o check de avaliado)
-[14:40:35]    👤 Processando: Eric Camilo de Souza → C
-[14:40:39]    ✅ Popup (Conceito) confirmado.
+[12:51:49]    👤 Processando: Augusto Búrigo Locks → C
+[12:51:54]    ✅ Popup (Conceito) confirmado.
+[12:52:02]    👤 Processando: Bernardo Marçal Costa → A
+[12:52:06]    ✅ Popup (Conceito) confirmado.
+[12:52:14]    👤 Processando: Eric Camilo de Souza → A
+[12:52:18]    ✅ Popup (Conceito) confirmado.
+[12:52:26]    👤 Processando: Felipe Ricardo de Sousa → A
+[12:52:30]    ✅ Popup (Conceito) confirmado.
+[12:52:38]    👤 Processando: Frederico Brasil Laiate → C
+[12:52:42]    ✅ Popup (Conceito) confirmado.
+[12:52:50]    👤 Processando: Fylipe Denazio Mello Júnior → A
+[12:52:54]    ✅ Popup (Conceito) confirmado.
+[12:53:02]    👤 Processando: Gabriel Nicolli Lozano Leonel → A
+[12:53:06]    ✅ Popup (Conceito) confirmado.
+[12:53:14]    👤 Processando: Gabriel Viana Guimarães Kuhnen → C
+[12:53:19]    ✅ Popup (Conceito) confirmado.
+[12:53:26]    👤 Processando: Giulia Scharman Henrique → A
+[12:53:31]    ✅ Popup (Conceito) confirmado.
+[12:53:38]    👤 Processando: Guilherme Dalsasso Machado → A
+[12:53:43]    ✅ Popup (Conceito) confirmado.
+[12:53:50]    👤 Processando: Gustavo Schmitz → A
+[12:53:55]    ✅ Popup (Conceito) confirmado.
+[12:54:02]    👤 Processando: Helena da Silva Martins → A
+[12:54:07]    ✅ Popup (Conceito) confirmado.
+[12:54:14]    ➡️ Avançando para a Página 2...
+[12:54:18] 
+📄 Verificando alunos na Página 2...
+[12:54:18]    👤 Processando: Helena Pangussat Bequi → A
+[12:54:22]    ✅ Popup (Conceito) confirmado.
+[12:54:30]    👤 Processando: João Pedro Lopes → A
+[12:54:35]    ✅ Popup (Conceito) confirmado.
+[12:54:42]    👤 Processando: João Pedro Medeiros Guedes → B
+[12:54:47]    ✅ Popup (Conceito) confirmado.
+[12:54:54]    👤 Processando: José Renato Raposo Silva → C
+[12:54:59]    ✅ Popup (Conceito) confirmado.
+[12:55:06]    👤 Processando: José Vinicius Marques Correia → C
+[12:55:11]    ✅ Popup (Conceito) confirmado.
+[12:55:18]    👤 Processando: José Vitor Sabadini Medeiros → A
+[12:55:23]    ✅ Popup (Conceito) confirmado.
+[12:55:30]    👤 Processando: Kaio Junckes Dilli → A
+[12:55:35]    ✅ Popup (Conceito) confirmado.
+[12:55:43]    👤 Processando: Lívia Jung Schäfer → B
+[12:55:47]    ✅ Popup (Conceito) confirmado.
+[12:55:55]    👤 Processando: Lucas Schveitzer Ventura → B
+[12:55:59]    ✅ Popup (Conceito) confirmado.
+[12:56:07]    👤 Processando: Maria Luiza Fonseca Gonzaga → A
+[12:56:11]    ✅ Popup (Conceito) confirmado.
+[12:56:19]    👤 Processando: Mateus Hoffmann da Silva → B
+[12:56:23]    ✅ Popup (Conceito) confirmado.
+[12:56:31]    👤 Processando: Matheus Cardoso Prado → C
+[12:56:35]    ✅ Popup (Conceito) confirmado.
+[12:56:43]    ➡️ Avançando para a Página 3...
+[12:56:46] 
+📄 Verificando alunos na Página 3...
+[12:56:46]    👤 Processando: Nicolas Osvaldo Soares → A
+[12:56:51]    ✅ Popup (Conceito) confirmado.
+[12:56:59]    👤 Processando: Raul Laurentino de Souza → A
+[12:57:03]    ✅ Popup (Conceito) confirmado.
+[12:57:11]    👤 Processando: Ricardo Espindola Alves → C
+[12:57:15]    ✅ Popup (Conceito) confirmado.
+[12:57:23]    👤 Processando: Sofia Campos Godinho → C
+[12:57:27]    ✅ Popup (Conceito) confirmado.
+[12:57:35]    👤 Processando: Thiago Collin Martins → B
+[12:57:39]    ✅ Popup (Conceito) confirmado.
+[12:57:47]    👤 Processando: Vanessa Antonella Araújo Tres → A
+[12:57:51]    ✅ Popup (Conceito) confirmado.
+[12:57:59]    👤 Processando: Vinícius Ferreira Fernandes Marques Romero → A
+[12:58:04]    ✅ Popup (Conceito) confirmado.
+[12:58:11]    👤 Processando: Vinícius Moreira da Silva → C
+[12:58:16]    ✅ Popup (Conceito) confirmado.
+[12:58:23]    👤 Processando: Vitor Martinho Lofi → C
+[12:58:28]    ✅ Popup (Conceito) confirmado.
+[12:58:35] 
+🔍 Realizando Verificação Final...
+[12:58:35] ✅ Processo finalizado!

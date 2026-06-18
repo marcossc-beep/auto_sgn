@@ -1,0 +1,15 @@
+1. Acessa o SGN e realiza login com usuário e senha.
+2. Vai para a aba de Conceitos e seleciona o trimestre informado.
+3. Varre a tabela de alunos do diário para identificar alunos com conceito final "C".
+4. Para cada aluno elegível, clica no ícone de edição (lápis) da ficha.
+5. Expande o painel de "Conceitos Técnicos" e preenche apenas os conceitos mapeados.
+5.1 Ao preencher conceitos técnicos, reconsulta cada linha por índice antes de agir (evita problemas com elementos que mudam/removem do DOM).
+5.2 O bot aplica pequenas pausas e tentativas nos cliques críticos (ex.: botão "Adicionar") e tempo de espera estendido para salvar o formulário, para tolerar respostas lentas do SGN.
+6. Clica em "Importar observações" para trazer os socioemocionais.
+7. Garante que a sanfona de "Recomposição de Aprendizagem (RA)" esteja expandida (abre-a mesmo que aparente já estar aberta).
+8. Seleciona "PIA" no conceito parcial TR1 antes de abrir o modal de RA.
+9. Clica em "Adicionar" para abrir o modal de RA.
+10. Preenche habilidade, datas de início e término, justificativa, e publica online se solicitado.
+11. Navega para a aba "Anexo", abre o modal de upload e envia o arquivo de RA do diretório uploads/RA.
+12. Salva o formulário de RA e aguarda confirmação de fechamento do modal.
+13. Se algum passo crítico falhar, o bot interrompe a execução e grava logs de depuração.

@@ -1,0 +1,7 @@
+*H1 - Reconhecer ferramentas para o desenvolvimento de atividades (repositório, controle de versão)
+*H11 - Utilizar técnicas de integração de aplicações com banco de dados na estruturação do sistema
+*H2 - Instalar ferramentas de acordo com requisitos de hardware, software e parâmetro de configuração
+*H3 - Aplicar linguagem de programação por meio do ambiente integrado de desenvolvimento (IDE)
+*H4 - Integrar banco de dados por meio da linguagem de programação
+*H5 - Aplicar métodos e técnicas de programação
+*H13 - Reconhecer especificações técnicas e paradigmas de linguagem de programação

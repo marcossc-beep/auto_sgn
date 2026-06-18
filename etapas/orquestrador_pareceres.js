@@ -82,34 +82,9 @@ class GradeAutomation {
         try {
             this.addLog(`🚀 Iniciando Fase 1: Validação de Notas e Conceitos (${this.trSelection})...`);
 
-            // Trava de segurança contra redirecionamento do SGN
-            const urlAtual = this.page.url();
-            if (urlAtual.includes('login.html')) {
-                throw new Error("O robô foi jogado de volta para a tela de login. A sessão caiu ou o SGN recusou o acesso direto ao diário.");
-            }
-
             this.addLog("Procurando a aba 'Conceitos' na interface do diário...");
-            
-            // Estratégia 1: Busca robusta baseada no HTML (abaConceitos) que você enviou
-            const abaSelecionada = await this.page.evaluate(() => {
-                const links = Array.from(document.querySelectorAll('a'));
-                const alvo = links.find(l => 
-                    (l.innerText && l.innerText.toUpperCase().includes('CONCEITOS')) || 
-                    (l.getAttribute('href') && l.getAttribute('href').includes('abaConceitos'))
-                );
-                if (alvo) {
-                    alvo.click();
-                    return true;
-                }
-                return false;
-            });
-
-            // Estratégia 2: Se o evaluate falhar por qualquer desalinhamento, tenta o seletor direto
-            if (!abaSelecionada) {
-                const seletorAbaConceitos = 'a[href*="abaConceitos"], a[href$="abaConceitos"]';
-                await this.page.waitForSelector(seletorAbaConceitos, { visible: true, timeout: 15000 });
-                await this.page.click(seletorAbaConceitos);
-            }
+            await this.page.waitForSelector('li a[href*="Conceitos"], a[href*="conceitos"]', { visible: true, timeout: 30000 });
+            await this.page.click('li a[href*="Conceitos"], a[href*="conceitos"]');
             
             // Pausa estratégica para a aba renderizar completamente
             await sleep(3000, 4000);
@@ -205,7 +180,8 @@ class GradeAutomation {
         }
    }
 // ================= FASE 1: CONCEITOS =================
-   async _processConceptsPhase() {
+   // ================= FASE 1: CONCEITOS =================
+    async _processConceptsPhase() {
         try {
             this.addLog("🔄 Iniciando varredura combinada (Trava de Lápis Verde + Regra de CF + Forçar Habilidades)...");
             const seletorTabela = this.tableBodySelector;
@@ -327,63 +303,79 @@ class GradeAutomation {
                     await sleep(2500, 3500);
 
                     // =========================================================================
-                    // ETAPA EXTRA EXCLUSIVA: VALIDAÇÃO COMPLETA E CORREÇÃO DE TODAS AS HABILIDADES
+                    // ETAPA EXTRA EXCLUSIVA: VALIDAÇÃO E PREENCHIMENTO MANUAL FORÇADO
                     // =========================================================================
-                    this.addLog(`🔍 Analisando todas as habilidades para garantir alinhamento com [${decisaoAluno.conceitoNormalizado}]...`);
-                    
-                    // Descobre a quantidade exata de habilidades geradas no modal para este aluno
-                    const totalHabilidades = await this.page.evaluate(() => {
-                        return document.querySelectorAll('tbody[id="formAtitudes:panelAtitudes:dataTableHabilidades_data"] tr').length;
+                    const precisaPreencherManual = await this.page.evaluate(() => {
+                        // Captura todas as linhas da tabela de habilidades dinamicamente
+                        const linhasHabilidades = document.querySelectorAll('tbody[id="formAtitudes:panelAtitudes:dataTableHabilidades_data"] tr');
+                        if (linhasHabilidades.length === 0) return true; // Se não carregou, falhou
+                        
+                        // Faz um FOR passando por TODAS as habilidades do aluno na tela
+                        for (let k = 0; k < linhasHabilidades.length; k++) {
+                            const selectEl = document.getElementById(`formAtitudes:panelAtitudes:dataTableHabilidades:${k}:notaConceito_input`);
+                            const labelEl = document.getElementById(`formAtitudes:panelAtitudes:dataTableHabilidades:${k}:notaConceito_label`);
+                            
+                            let val = "";
+                            if (selectEl) {
+                                val = selectEl.value ? selectEl.value.trim().toUpperCase() : "";
+                            } else if (labelEl) {
+                                val = labelEl.innerText ? labelEl.innerText.trim().toUpperCase() : "";
+                            }
+                            
+                            // Se encontrar pelo menos UMA habilidade vazia ou diferente do padrão (A ou B)
+                            if (val !== 'A' && val !== 'B') {
+                                return true; // Retorna true para acionar a varredura corretiva manual
+                            }
+                        }
+                        return false; // Todas estão perfeitas
                     });
 
-                    let totalCorrigidos = 0;
+                    if (precisaPreencherManual) {
+                        this.addLog(`⚠️ Importação falhou ou ficou incompleta. Forçando preenchimento manual "humanizado" para [${decisaoAluno.conceitoNormalizado}] nas habilidades faltantes...`);
+                        
+                        const totalHabilidades = await this.page.evaluate(() => {
+                            return document.querySelectorAll('tbody[id="formAtitudes:panelAtitudes:dataTableHabilidades_data"] tr').length;
+                        });
 
-                    // Varre e avalia individualmente cada linha/select de habilidade
-                    for (let j = 0; j < totalHabilidades; j++) {
-                        const precisaCorrigir = await this.page.evaluate((index, conceitoAlvo) => {
-                            const idBase = `formAtitudes:panelAtitudes:dataTableHabilidades:${index}:notaConceito`;
-                            const select = document.getElementById(`${idBase}_input`);
-                            
-                            if (select) {
-                                const val = select.value ? select.value.trim().toUpperCase() : "";
-                                // Se a importação falhou, deixou em branco ou trouxe um conceito diferente do esperado, marca para correção
-                                return (val !== conceitoAlvo);
-                            }
-                            return true; 
-                        }, j, decisaoAluno.conceitoNormalizado);
+                        let totalInjetados = 0;
 
-                        if (precisaCorrigir) {
+                        // Loop Humanizado: Passa por todas corrigindo apenas as que o botão do SGN não preencheu
+                        for (let j = 0; j < totalHabilidades; j++) {
                             const alterouLinha = await this.page.evaluate((index, conceitoAlvo) => {
                                 const idBase = `formAtitudes:panelAtitudes:dataTableHabilidades:${index}:notaConceito`;
                                 const select = document.getElementById(`${idBase}_input`);
                                 const labelVisual = document.getElementById(`${idBase}_label`);
                                 
                                 if (select) {
-                                    select.value = conceitoAlvo;
-                                    if (labelVisual) labelVisual.innerText = conceitoAlvo;
-                                    
-                                    // Dispara o evento nativo para que o SGN/PrimeFaces processe a mudança via AJAX
-                                    select.dispatchEvent(new Event('change', { bubbles: true }));
-                                    return true;
+                                    // Só altera se a nota atual for diferente da nota alvo calculada do aluno
+                                    const notaAtual = select.value ? select.value.trim().toUpperCase() : "";
+                                    if (notaAtual !== conceitoAlvo) {
+                                        select.value = conceitoAlvo;
+                                        if (labelVisual) labelVisual.innerText = conceitoAlvo;
+                                        
+                                        // Fogo! Dispara o AJAX do PrimeFaces
+                                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                                        return true;
+                                    }
                                 }
                                 return false;
                             }, j, decisaoAluno.conceitoNormalizado);
 
                             if (alterouLinha) {
-                                totalCorrigidos++;
-                                this.addLog(`   ↳ Habilidade ${j + 1}/${totalHabilidades} ajustada/corrigida para [${decisaoAluno.conceitoNormalizado}]`);
-                                // Pausa técnica fundamental para dar respiro ao servidor SGN computar o campo
+                                totalInjetados++;
+                                // O SEGREDO: Espera o SGN respirar antes de preencher a próxima linha
                                 await sleep(800, 1200); 
                             }
                         }
-                    }
 
-                    if (totalCorrigidos > 0) {
-                        this.addLog(`⚡ Sucesso: ${totalCorrigidos} de ${totalHabilidades} habilidades foram ajustadas/corrigidas manualmente.`);
+                        if (totalInjetados > 0) {
+                            this.addLog(`⚡ Sucesso: ${totalInjetados} habilidades preenchidas ou corrigidas individualmente com [${decisaoAluno.conceitoNormalizado}].`);
+                            await sleep(1000, 1500); 
+                        }
+                        
                     } else {
-                        this.addLog("✅ Confirmação: Todas as habilidades foram preenchidas perfeitamente via importação automática.");
+                        this.addLog("✅ Confirmação: Todas as habilidades foram importadas com sucesso automaticamente na primeira tentativa.");
                     }
-                    await sleep(1000, 1500);
                     // =========================================================================
 
                     // --- SANFONA 2: Socioemocionais ---
@@ -443,8 +435,6 @@ class GradeAutomation {
         }
     }
 
-
-    
     async _analyzePendingStudents() {
         return await this.page.evaluate((selRow, selSelect) => {
             const pending = [];

@@ -8,7 +8,7 @@ const LOG_FILE = path.join(process.cwd(), "automacao_logs.txt");
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function runConceitosAutomation({ user, password, diaryLink, avSelection, jsonData, trSelection, addLog }) {
+export async function runConceitosAutomation({ user, password, diaryLink, avSelection, jsonData, addLog }) {
   
   fs.writeFileSync(LOG_FILE, `--- Início da Execução: ${new Date().toLocaleString()} ---\n`, 'utf8');
 
@@ -31,13 +31,10 @@ export async function runConceitosAutomation({ user, password, diaryLink, avSele
   const sessionCookies = await loginPage.cookies();
   await loginBrowser.close();
 
-  const isProd = process.env.prod === 'true';
-
   const browser = await puppeteer.launch({
-    headless: isProd, // Aplica a lógica aqui também
+    headless: false,
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
   });
-  
 
   const page = await browser.newPage();
   await page.setViewport({ width: 1680, height: 1050 });
@@ -54,46 +51,7 @@ export async function runConceitosAutomation({ user, password, diaryLink, avSele
       );
       if (tab) tab.click();
     });
-    await delay(3000);
-
-    // Seleciona o período/trimestre (ex: TR1, TR2...) quando fornecido
-    try {
-      const trAlvo = (trSelection || 'TR1').toString().trim().toUpperCase();
-      log(`🔎 Selecionando período: ${trAlvo}`);
-
-      const dropdownTrigger = 'div[id*="mediasConceito"] .ui-selectonemenu-trigger, div[id*="formAbaConceitos"] .ui-selectonemenu-trigger, div[id*="mediasConceito"]';
-      await page.waitForSelector(dropdownTrigger, { visible: true, timeout: 15000 });
-      await page.click(dropdownTrigger);
-      await delay(1200);
-
-      const resultado = await page.evaluate((target) => {
-        const itens = Array.from(document.querySelectorAll('li.ui-selectonemenu-item'));
-        const opcoes = itens.map(i => i.innerText.trim());
-        const alvo = itens.find(li => {
-          const text = li.innerText.trim().toUpperCase();
-          const tgt = target.toUpperCase();
-          if (text === tgt || text.includes(tgt)) return true;
-          if (tgt === 'TR1' && (text.includes('1º') || text.includes('1O') || text.includes('PRIMEIRO'))) return true;
-          if (tgt === 'TR2' && (text.includes('2º') || text.includes('2O') || text.includes('SEGUNDO'))) return true;
-          if (tgt === 'TR3' && (text.includes('3º') || text.includes('3O') || text.includes('TERCEIRO'))) return true;
-          if (tgt === 'TR4' && (text.includes('4º') || text.includes('4O') || text.includes('QUARTO'))) return true;
-          return false;
-        });
-        if (alvo) { alvo.click(); return { encontrado: true }; }
-        return { encontrado: false, opcoes };
-      }, trAlvo);
-
-      if (!resultado.encontrado) {
-        log(`⚠️ Período ${trAlvo} não encontrado nas opções: [${(resultado.opcoes||[]).join(', ')}]`);
-      } else {
-        log(`✅ Período ${trAlvo} selecionado.`);
-      }
-
-      // Aguarda possível carregamento/loader
-      await delay(2000);
-    } catch (e) {
-      log(`⚠️ Não foi possível selecionar o período: ${e.message}`);
-    }
+    await delay(5000);
 
     log(`Clicando no lápis da coluna: ${avSelection}`);
     await page.evaluate((av) => {

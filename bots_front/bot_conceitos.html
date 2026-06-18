@@ -35,6 +35,11 @@
                 <input type="password" id="password" placeholder="Sua senha" class="w-full p-2 border rounded">
             </div>
 
+            <div class="col-span-2 flex items-center gap-2">
+                <input type="checkbox" id="rememberCredentials" class="h-4 w-4 text-green-600 rounded border-gray-300 focus:ring-green-500">
+                <label for="rememberCredentials" class="text-sm text-gray-700">Lembrar informações de usuário neste navegador</label>
+            </div>
+
             <div>
                 <label for="turmaSelect" class="block text-sm font-bold mb-1">Turma</label>
                 <div class="flex gap-2">
@@ -53,6 +58,47 @@
                     </select>
                     <button id="btnManageUcs" title="Gerenciar UCs" class="bg-gray-200 px-3 rounded hover:bg-gray-300">⚙️</button>
                 </div>
+            </div>
+
+            <div class="col-span-2">
+                <label for="diaryLinkInput" class="block text-sm font-bold mb-1">Link do Diário (URL)</label>
+                <input type="text" id="diaryLinkInput" placeholder="Ex: https://sgn.fiesc.edu.br/... (ou deixe vazio para usar link salvo)" class="w-full p-2 border rounded text-sm">
+                <div class="text-xs text-gray-500 mt-1">💡 Se o UC selecionado não tiver link configurado, cole o URL do diário aqui</div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold mb-1">Avaliação / Coluna</label>
+                <input type="text" id="avSelection" placeholder="Ex: TR1, Trabalho, Prova" class="w-full p-2 border rounded">
+            </div>
+
+            <div>
+                <label for="trSelect" class="block text-sm font-bold mb-1">Período / Trimestre</label>
+                <select id="trSelect" class="w-full p-2 border rounded bg-white">
+                    <option value="TR1">TR1</option>
+                    <option value="TR2">TR2</option>
+                    <option value="TR3" selected>TR3</option>
+                    <option value="TR4">TR4</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-4 border rounded-lg border-gray-200 bg-slate-50 p-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div class="font-semibold text-gray-800">Lista de Conceitos</div>
+                <div class="flex flex-wrap gap-2">
+                    <button id="btnSyncClass" class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Sincronizar turma</button>
+                    <button id="btnJsonMode" class="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">Conceitos via JSON</button>
+                    <button id="btnToggleMode" class="px-3 py-2 bg-slate-700 text-white rounded hover:bg-slate-800">Ver lista visual</button>
+                </div>
+            </div>
+
+            <div id="visualListContainer" class="space-y-2"></div>
+            <textarea id="jsonEditor" class="hidden w-full p-3 border rounded-lg font-mono text-sm h-56 resize-none" placeholder='Cole aqui um JSON de conceitos'></textarea>
+
+            <div class="mt-3 flex flex-wrap gap-2">
+                <button id="btnAllA" class="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700">Tudo A</button>
+                <button id="btnAllB" class="px-3 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700">Tudo B</button>
+                <button id="btnAllC" class="px-3 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">Tudo C</button>
             </div>
         </div>
 
@@ -78,8 +124,13 @@
         const elements = {
             user: document.getElementById('user'),
             pass: document.getElementById('password'),
+            remember: document.getElementById('rememberCredentials'),
             turmaSelect: document.getElementById('turmaSelect'),
             ucSelect: document.getElementById('ucSelect'),
+            diaryLinkInput: document.getElementById('diaryLinkInput'),
+            avSelection: document.getElementById('avSelection'),
+            jsonEditor: document.getElementById('jsonEditor'),
+            visualListContainer: document.getElementById('visualListContainer'),
             btnRun: document.getElementById('btnRun'),
             btnCancel: document.getElementById('btnCancel'),
             terminal: document.getElementById('terminal'),
@@ -88,6 +139,9 @@
         };
 
         let currentJobId = null;
+        let currentMode = 'visual';
+        let currentStudentList = [];
+        let turmaDataMap = {};
 
         function log(msg, type = 'info') {
             const div = document.createElement('div');
@@ -97,21 +151,175 @@
             elements.terminal.scrollTop = elements.terminal.scrollHeight;
         }
 
+        function normalizeArrayResponse(responseData) {
+            if (Array.isArray(responseData)) return responseData;
+            if (responseData && typeof responseData === 'object') {
+                return Object.entries(responseData).map(([key, value]) => {
+                    if (value && typeof value === 'object') {
+                        return { id: key, nome: key, alunos: value };
+                    }
+                    const isUrl = typeof value === 'string' && value.startsWith('http');
+                    return { 
+                        id: key, 
+                        nome: key, 
+                        alunos: isUrl ? undefined : value,
+                        link_diario: isUrl ? value : undefined 
+                    };
+                });
+            }
+            return [];
+        }
+
+        function buildStudentConceptsFromSelectedTurma() {
+            const turmaId = elements.turmaSelect.value;
+            if (!turmaId || !turmaDataMap[turmaId]) return [];
+
+            const alunoData = turmaDataMap[turmaId];
+            if (Array.isArray(alunoData)) {
+                return alunoData.map(nome => ({ nome, conceito: 'C' }));
+            }
+
+            if (alunoData && typeof alunoData === 'object') {
+                const values = Object.values(alunoData).flat();
+                return values.map(nome => ({ nome, conceito: 'C' }));
+            }
+
+            return [];
+        }
+
+        function renderVisualList() {
+            const container = document.getElementById('visualListContainer');
+            container.innerHTML = '';
+
+            currentStudentList.forEach((student, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded border border-gray-200 bg-white';
+                row.dataset.index = index;
+
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'flex-1 text-sm text-gray-800';
+                nameDiv.textContent = student.nome;
+
+                const select = document.createElement('select');
+                select.className = 'p-2 border rounded bg-white text-sm w-24';
+                ['A', 'B', 'C'].forEach(value => {
+                    const opt = document.createElement('option');
+                    opt.value = value;
+                    opt.textContent = value;
+                    if (student.conceito === value) opt.selected = true;
+                    select.appendChild(opt);
+                });
+                select.addEventListener('change', () => {
+                    student.conceito = select.value;
+                    updateJsonEditor();
+                });
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm';
+                removeButton.textContent = 'Remover';
+                removeButton.addEventListener('click', () => {
+                    currentStudentList.splice(index, 1);
+                    renderVisualList();
+                    updateJsonEditor();
+                });
+
+                const controls = document.createElement('div');
+                controls.className = 'flex gap-2 items-center';
+                controls.appendChild(select);
+                controls.appendChild(removeButton);
+
+                row.appendChild(nameDiv);
+                row.appendChild(controls);
+                container.appendChild(row);
+            });
+        }
+
+        function updateJsonEditor() {
+            const editor = document.getElementById('jsonEditor');
+            editor.value = JSON.stringify(currentStudentList, null, 2);
+        }
+
+        function setAllConcepts(value) {
+            currentStudentList = currentStudentList.map(student => ({ ...student, conceito: value }));
+            if (currentMode === 'visual') {
+                renderVisualList();
+            }
+            updateJsonEditor();
+        }
+
+        function switchToJsonMode() {
+            currentMode = 'json';
+            elements.jsonEditor.classList.remove('hidden');
+            document.getElementById('visualListContainer').classList.add('hidden');
+            document.getElementById('btnToggleMode').textContent = 'Ver lista visual';
+            updateJsonEditor();
+        }
+
+        function switchToVisualMode() {
+            currentMode = 'visual';
+            elements.jsonEditor.classList.add('hidden');
+            document.getElementById('visualListContainer').classList.remove('hidden');
+            document.getElementById('btnToggleMode').textContent = 'Modo JSON';
+            renderVisualList();
+        }
+
+        function syncClassList() {
+            currentStudentList = buildStudentConceptsFromSelectedTurma();
+            if (currentMode === 'visual') {
+                renderVisualList();
+            }
+            updateJsonEditor();
+            if (currentStudentList.length === 0) {
+                elements.visualListContainer.innerHTML = '<div class="text-sm text-gray-500">Selecione uma turma para carregar os alunos.</div>';
+            }
+        }
+
+        function generateJsonWithAllC() {
+            currentStudentList = buildStudentConceptsFromSelectedTurma();
+            currentStudentList = currentStudentList.map(student => ({ ...student, conceito: 'C' }));
+            switchToJsonMode();
+        }
+
+        function getPayloadStudentList() {
+            const jsonText = elements.jsonEditor.value?.trim();
+            if (jsonText.length > 0) {
+                try {
+                    const parsed = JSON.parse(jsonText);
+                    if (!Array.isArray(parsed)) throw new Error('JSON deve ser um array');
+                    return parsed.map(item => ({ nome: item.nome, conceito: item.conceito }));
+                } catch (err) {
+                    throw new Error('JSON inválido: ' + err.message);
+                }
+            }
+            return currentStudentList;
+        }
+
         // --- FUNÇÕES DE BUSCA NO BANCO (NEON) ---
 
         async function refreshTurmaOptions() {
             try {
-                const res = await fetch('/api/turmas');
+                const res = await fetch('https://bot-conceitos-sgn.onrender.com/turmas');
                 if (!res.ok) throw new Error('Erro na API de turmas');
-                const turmas = await res.json();
+                const data = await res.json();
+                const turmas = normalizeArrayResponse(data);
                 
+                turmaDataMap = {};
                 elements.turmaSelect.innerHTML = '<option value="">Selecione uma turma</option>';
                 turmas.forEach(t => {
+                    const turmaId = t.id ?? t.nome ?? '';
+                    let alunos = t.alunos;
+                    if (typeof alunos === 'string') {
+                        try {
+                            alunos = JSON.parse(alunos);
+                        } catch (e) {
+                            alunos = alunos.split(',').map(item => item.trim()).filter(Boolean);
+                        }
+                    }
+                    turmaDataMap[turmaId] = alunos;
                     const opt = document.createElement('option');
-                    opt.value = t.id;
-                    opt.textContent = t.nome;
-                    // Salva os alunos como dado extra no select
-                    opt.dataset.alunos = typeof t.alunos === 'string' ? t.alunos : JSON.stringify(t.alunos);
+                    opt.value = turmaId;
+                    opt.textContent = t.nome ?? turmaId;
                     elements.turmaSelect.appendChild(opt);
                 });
                 log("✅ Turmas sincronizadas com o Banco Neon.");
@@ -122,15 +330,17 @@
 
         async function refreshUcOptions() {
             try {
-                const res = await fetch('/api/ucs');
+                const res = await fetch('https://bot-conceitos-sgn.onrender.com/ucs');
                 if (!res.ok) throw new Error('Erro na API de UCs');
-                const ucs = await res.json();
+                const data = await res.json();
+                const ucs = normalizeArrayResponse(data);
                 
                 elements.ucSelect.innerHTML = '<option value="">Selecione uma UC</option>';
                 ucs.forEach(u => {
                     const opt = document.createElement('option');
-                    opt.value = u.link_diario; // O valor é o link que o Puppeteer vai usar
-                    opt.textContent = u.nome;
+                    // Usa link_diario se disponível, senão usa o ID como fallback
+                    opt.value = u.link_diario || u.id || u.nome || '';
+                    opt.textContent = u.nome ?? u.id;
                     elements.ucSelect.appendChild(opt);
                 });
                 log("✅ UCs sincronizadas com o Banco Neon.");
@@ -144,6 +354,20 @@
         window.addEventListener('DOMContentLoaded', async () => {
             log("Iniciando conexão com o servidor...");
             
+            // Carrega credenciais salvas, se houver
+            try {
+                const savedCredentials = localStorage.getItem('botConceitosCredentials');
+                if (savedCredentials) {
+                    const parsed = JSON.parse(savedCredentials);
+                    elements.user.value = parsed.user || '';
+                    elements.pass.value = parsed.password || '';
+                    elements.remember.checked = true;
+                    log('✅ Credenciais carregadas do navegador.');
+                }
+            } catch (err) {
+                console.warn('Erro ao carregar credenciais salvas:', err);
+            }
+
             // Carrega os dados iniciais
             await Promise.all([refreshTurmaOptions(), refreshUcOptions()]);
 
@@ -164,17 +388,91 @@
                 }
             });
 
+            elements.turmaSelect.addEventListener('change', () => {
+                syncClassList();
+            });
+
+            document.getElementById('btnSyncClass').addEventListener('click', (event) => {
+                event.preventDefault();
+                syncClassList();
+            });
+
+            document.getElementById('btnJsonMode').addEventListener('click', (event) => {
+                event.preventDefault();
+                generateJsonWithAllC();
+            });
+
+            document.getElementById('btnToggleMode').addEventListener('click', (event) => {
+                event.preventDefault();
+                if (currentMode === 'visual') {
+                    switchToJsonMode();
+                } else {
+                    switchToVisualMode();
+                }
+            });
+
+            document.getElementById('btnAllA').addEventListener('click', (event) => {
+                event.preventDefault();
+                setAllConcepts('A');
+            });
+
+            document.getElementById('btnAllB').addEventListener('click', (event) => {
+                event.preventDefault();
+                setAllConcepts('B');
+            });
+
+            document.getElementById('btnAllC').addEventListener('click', (event) => {
+                event.preventDefault();
+                setAllConcepts('C');
+            });
+
+            syncClassList();
+
             // Lógica do Botão Iniciar
             elements.btnRun.addEventListener('click', async () => {
+                let payloadStudentList;
+                try {
+                    payloadStudentList = getPayloadStudentList();
+                } catch (err) {
+                    alert(err.message);
+                    elements.btnRun.disabled = false;
+                    elements.btnRun.innerText = 'INICIAR ROBÔ';
+                    elements.btnCancel.classList.add('hidden');
+                    return;
+                }
+
+                const manualLink = elements.diaryLinkInput?.value?.trim();
                 const payload = {
                     user: elements.user.value,
                     password: elements.pass.value,
-                    diaryLink: elements.ucSelect.value,
-                    jsonData: elements.turmaSelect.options[elements.turmaSelect.selectedIndex]?.dataset.alunos
+                    diaryLink: manualLink || elements.ucSelect.value,
+                    avSelection: elements.avSelection.value,
+                    jsonData: payloadStudentList,
+                    trSelection: document.getElementById('trSelect')?.value
                 };
 
-                if (!payload.user || !payload.password || !payload.diaryLink || !payload.jsonData) {
-                    alert("Preencha todos os campos e selecione Turma/UC!");
+                // DEBUG: Log dos valores para verificar o que está vazio
+                console.log("🔍 DEBUG - Payload antes de validar:", {
+                    user: payload.user ? "✅ " + payload.user : "❌ vazio",
+                    password: payload.password ? "✅ preenchido" : "❌ vazio",
+                    diaryLink: payload.diaryLink ? "✅ " + payload.diaryLink : "❌ vazio",
+                    avSelection: payload.avSelection ? "✅ " + payload.avSelection : "❌ vazio",
+                    jsonData: payload.jsonData.length + " alunos"
+                });
+
+                if (!payload.user || !payload.password || !payload.diaryLink || !payload.avSelection) {
+                    alert("Preencha: Usuário, Senha, UC (ou Link Manual) e Avaliação/Coluna!");
+                    elements.btnRun.disabled = false;
+                    elements.btnRun.innerText = 'INICIAR ROBÔ';
+                    elements.btnCancel.classList.add('hidden');
+                    return;
+                }
+
+                if (!Array.isArray(payload.jsonData) || payload.jsonData.length === 0) {
+                    alert("Adicione pelo menos um aluno com conceito na lista de conceitos (visual ou JSON)!");
+                    elements.btnRun.disabled = false;
+                    elements.btnRun.innerText = 'INICIAR ROBÔ';
+                    elements.btnCancel.classList.add('hidden');
                     return;
                 }
 
@@ -190,6 +488,14 @@
                     });
                     
                     const data = await res.json();
+                    if (elements.remember.checked) {
+                        localStorage.setItem('botConceitosCredentials', JSON.stringify({
+                            user: payload.user,
+                            password: payload.password
+                        }));
+                    } else {
+                        localStorage.removeItem('botConceitosCredentials');
+                    }
                     currentJobId = data.jobId;
                     pollStatus(currentJobId);
                 } catch (error) {
