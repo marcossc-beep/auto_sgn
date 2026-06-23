@@ -62,23 +62,31 @@ class RAAutomation {
     // UTILITÁRIOS
     // ============================================================
 
-    /** Aguarda loaders PrimeFaces sumirem */
-    async aguardarLoader() {
-        await pSleep(500);
+    /** Aguarda loaders sumirem e a fila AJAX do PrimeFaces ficar vazia */
+    async aguardarAjax(msExtra = 500) {
         try {
             await this.page.waitForFunction(() => {
                 const loaders = document.querySelectorAll(
                     '.ajax-loader, .blockUI, .ui-blockui, .ui-loading-indicator, div[id="enviarStatusAguarde"]'
                 );
-                return Array.from(loaders).every(el =>
+                const loadersHidden = Array.from(loaders).every(el =>
                     window.getComputedStyle(el).display === 'none' ||
                     window.getComputedStyle(el).visibility === 'hidden'
                 );
-            }, { timeout: 20000 });
+                const pfIdle = typeof PrimeFaces === 'undefined' || !PrimeFaces.ajax || !PrimeFaces.ajax.Queue || PrimeFaces.ajax.Queue.isEmpty();
+                return loadersHidden && pfIdle;
+            }, { timeout: 25000 });
         } catch (e) {
-            this.addLog(`[RA] Aviso: timeout do loader ignorado.`);
+            this.addLog(`[RA] Aviso: timeout ao aguardar AJAX/loaders.`);
         }
-        await pSleep(CONFIG.delays.step);
+        if (msExtra > 0) {
+            await pSleep(msExtra);
+        }
+    }
+
+    /** Aguarda loaders PrimeFaces sumirem (legado, com delay longo) */
+    async aguardarLoader() {
+        await this.aguardarAjax(CONFIG.delays.step);
     }
 
     /** Preenche um input de data com value + dispara onchange do PrimeFaces */
@@ -127,15 +135,43 @@ class RAAutomation {
             this.addLog(`[RA] Selecionando o ${this.trSelection}º Trimestre...`);
             const dropdownLabel = 'label[id*="mediasConceito_label"]';
             await this.page.waitForSelector(dropdownLabel, { timeout: 10000 });
+
+            // Captura o HTML atual da tabela de alunos para posterior comparação
+            const seletorTabela = 'tbody[id*="tabelaConceitos"], tbody[id*="dataTableConceitos_data"]';
+            const htmlAntigo = await this.page.evaluate((sel) => {
+                const el = document.querySelector(sel);
+                return el ? el.innerHTML : '';
+            }, seletorTabela);
+
             await this.page.click(dropdownLabel);
-            await pSleep(800);
+            await pSleep(500);
 
             const trIndex = parseInt(this.trSelection);
             const seletorOpcao = `li[id$="mediasConceito_${trIndex}"]`;
             await this.page.waitForSelector(seletorOpcao, { timeout: 5000 });
             await this.page.click(seletorOpcao);
             this.addLog(`[RA] Filtro TR${this.trSelection} aplicado. Aguardando tabela...`);
-            await this.aguardarLoader();
+            
+            // Pequena pausa para garantir que a chamada AJAX iniciou
+            await pSleep(400);
+
+            // Aguarda a tabela atualizar ou a fila AJAX do PrimeFaces ser concluída
+            await this.page.waitForFunction((sel, oldHtml) => {
+                const el = document.querySelector(sel);
+                const loaders = document.querySelectorAll(
+                    '.ajax-loader, .blockUI, .ui-blockui, .ui-loading-indicator, div[id="enviarStatusAguarde"]'
+                );
+                const loadersHidden = Array.from(loaders).every(e =>
+                    window.getComputedStyle(e).display === 'none' ||
+                    window.getComputedStyle(e).visibility === 'hidden'
+                );
+                const pfIdle = typeof PrimeFaces === 'undefined' || !PrimeFaces.ajax || !PrimeFaces.ajax.Queue || PrimeFaces.ajax.Queue.isEmpty();
+                
+                const changed = el ? el.innerHTML !== oldHtml : false;
+                return (changed || pfIdle) && loadersHidden;
+            }, { timeout: 20000 }, seletorTabela, htmlAntigo).catch(() => {});
+
+            await pSleep(300);
         } catch (e) {
             this.addLog(`⚠️ [RA] Aviso ao selecionar trimestre: ${e.message}`);
         }
@@ -348,18 +384,16 @@ class RAAutomation {
 
         await this.page.waitForSelector(linhasSeletor, { timeout: 10000 }).catch(() => {});
 
-        const capsJson = JSON.stringify(this.capacidadesAlvo);
-        const initialScan = await this.page.evaluate((sel, capsJson) => {
-            const caps = (() => { try { return JSON.parse(capsJson); } catch (e) { return capsJson; } })();
-            const normalize = (text) => text ? text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase() : '';
-            const normalizedCaps = [];
+        const caps = this.capacidadesAlvo;
+        const normalizedCaps = [];
+        if (Array.isArray(caps)) {
+            caps.forEach(c => normalizedCaps.push({ nome: String(c.nome || '').trim(), conceito: String(c.conceito || '').trim().toUpperCase() }));
+        } else if (caps && typeof caps === 'object') {
+            Object.keys(caps).forEach(k => normalizedCaps.push({ nome: String(k).trim(), conceito: String(caps[k]).trim().toUpperCase() }));
+        }
 
-            if (Array.isArray(caps)) {
-                caps.forEach(c => normalizedCaps.push({ nome: String(c.nome || '').trim(), conceito: String(c.conceito || '').trim().toUpperCase() }));
-            } else if (caps && typeof caps === 'object') {
-                Object.keys(caps).forEach(k => normalizedCaps.push({ nome: String(k).trim(), conceito: String(caps[k]).trim().toUpperCase() }));
-            }
-
+        // Obtém a lista das habilidades técnicas do HTML
+        const technicalSkillsHtml = await this.page.evaluate((sel) => {
             const isTechnicalRow = (text) => {
                 if (!text) return false;
                 const lower = text.toLowerCase();
@@ -368,10 +402,7 @@ class RAAutomation {
             };
 
             const rows = Array.from(document.querySelectorAll(sel));
-            const missingMapping = [];
-            const needsFill = [];
-            const alreadyFilled = [];
-
+            const names = [];
             rows.forEach(tr => {
                 const spanTxt = tr.querySelector('span[id*="habilidadeTxt"]');
                 let nomeHabilidade = spanTxt ? spanTxt.innerText.trim() : null;
@@ -379,50 +410,124 @@ class RAAutomation {
                     const tds = tr.querySelectorAll('td');
                     nomeHabilidade = tds.length > 1 ? tds[1].innerText.trim() : tr.innerText.trim();
                 }
-                if (!nomeHabilidade || !isTechnicalRow(nomeHabilidade)) return;
-
-                const normalizedName = normalize(nomeHabilidade);
-                const match = normalizedCaps.find(c => normalize(c.nome).includes(normalizedName) || normalizedName.includes(normalize(c.nome)));
-                if (!match) {
-                    missingMapping.push(nomeHabilidade);
-                    return;
-                }
-
-                const desired = match.conceito;
-                const current = tr.querySelector('label.ui-selectonemenu-label')?.innerText.trim() || '';
-                if (current === desired) {
-                    alreadyFilled.push(nomeHabilidade);
-                } else {
-                    needsFill.push({ nome: nomeHabilidade, desired, current });
+                if (nomeHabilidade && isTechnicalRow(nomeHabilidade)) {
+                    names.push(nomeHabilidade);
                 }
             });
+            return names;
+        }, linhasSeletor);
 
-            return { missingMapping, needsFill, alreadyFilled };
-        }, linhasSeletor, capsJson);
+        const normalize = (text) => text ? text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase() : '';
+        const missingMapping = [];
+        const targetsToFill = [];
 
-        if (initialScan.missingMapping.length > 0) {
-            const faltantes = initialScan.missingMapping.join(' | ');
-            this.addLog(`❌ [RA] Habilidade(s) detectada(s) no HTML sem conceito vinculado no JSON: ${faltantes}`);
+        for (const skillName of technicalSkillsHtml) {
+            const skillNameNorm = normalize(skillName);
+            const match = normalizedCaps.find(c => normalize(c.nome).includes(skillNameNorm) || skillNameNorm.includes(normalize(c.nome)));
+            if (!match) {
+                missingMapping.push(skillName);
+            } else {
+                targetsToFill.push({ nomeSgn: skillName, desired: match.conceito });
+            }
+        }
+
+        if (missingMapping.length > 0) {
+            const faltantes = missingMapping.join(' | ');
+            this.addLog(`❌ [RA] Habilidade(s) detectada(s) no HTML sem conceito correspondente no JSON: ${faltantes}`);
             await this.capturarDebugHtml('Habilidades sem mapeamento', [linhasSeletor, '#modalDadosAtitudes', 'tbody[id*="dataTableHabilidades_data"]']);
             throw new Error(`Faltam conceitos vinculados para as habilidades: ${faltantes}. Atualize o JSON de capacidades alvo.`);
         }
 
-        if (initialScan.needsFill.length === 0) {
-            this.addLog(`[RA] Todos os conceitos técnicos já estavam preenchidos corretamente. (${initialScan.alreadyFilled.length} itens)`);
-            return;
+        this.addLog(`[RA] Iniciando preenchimento sequencial de ${targetsToFill.length} habilidades técnicas (espera de 2s pós-AJAX)...`);
+
+        for (let i = 0; i < targetsToFill.length; i++) {
+            const target = targetsToFill[i];
+            this.addLog(`[RA] (${i + 1}/${targetsToFill.length}) Processando: "${target.nomeSgn}" → "${target.desired}"...`);
+
+            // Reconsulta a linha/select a cada iteração caso a tabela seja reconstruída pelo PrimeFaces
+            const rowInfo = await this.page.evaluate((sel, targetName) => {
+                const normalize = (text) => text ? text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase() : '';
+                const targetNorm = normalize(targetName);
+                const rows = Array.from(document.querySelectorAll(sel));
+
+                for (const tr of rows) {
+                    const spanTxt = tr.querySelector('span[id*="habilidadeTxt"]');
+                    let nome = spanTxt ? spanTxt.innerText.trim() : null;
+                    if (!nome) {
+                        const tds = tr.querySelectorAll('td');
+                        nome = tds.length > 1 ? tds[1].innerText.trim() : tr.innerText.trim();
+                    }
+                    if (!nome) continue;
+
+                    const normName = normalize(nome);
+                    if (normName === targetNorm || normName.includes(targetNorm) || targetNorm.includes(normName)) {
+                        const select = tr.querySelector('select[id$="_input"], select[id*="notaConceito_input"]');
+                        const label = tr.querySelector('label.ui-selectonemenu-label');
+                        const currentVal = label ? label.innerText.trim() : '';
+                        return {
+                            found: true,
+                            selectId: select ? select.id : null,
+                            currentVal: currentVal,
+                            hasSelect: !!select
+                        };
+                    }
+                }
+                return { found: false };
+            }, linhasSeletor, target.nomeSgn);
+
+            if (!rowInfo.found || !rowInfo.selectId) {
+                this.addLog(`⚠️ [RA] Linha ou select não encontrado para a habilidade "${target.nomeSgn}". Ignorando...`);
+                continue;
+            }
+
+            this.addLog(`[RA] Valor atual: "${rowInfo.currentVal}". Setando "${target.desired}"...`);
+
+            // Executa a alteração no select e dispara o evento de change
+            const alterou = await this.page.evaluate((selectId, desiredVal) => {
+                const select = document.getElementById(selectId);
+                if (!select) return { success: false, reason: 'select_not_found' };
+
+                const opt = Array.from(select.options).find(o => 
+                    (o.text || '').trim().toUpperCase() === desiredVal || 
+                    String(o.value).trim().toUpperCase() === desiredVal
+                );
+
+                if (!opt) {
+                    return { 
+                        success: false, 
+                        reason: `opcao_invalida: ${desiredVal}`,
+                        available: Array.from(select.options).map(o => o.value + ':' + o.text)
+                    };
+                }
+
+                select.value = opt.value;
+                select.dispatchEvent(new Event('input', { bubbles: true }));
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('blur', { bubbles: true }));
+                return { success: true };
+            }, rowInfo.selectId, target.desired);
+
+            if (!alterou.success) {
+                this.addLog(`❌ [RA] Falha ao setar valor da habilidade "${target.nomeSgn}": ${alterou.reason}`);
+                if (alterou.available) {
+                    this.addLog(`[RA] Opções disponíveis no select: ${JSON.stringify(alterou.available)}`);
+                }
+                throw new Error(`Falha ao preencher conceito para habilidade "${target.nomeSgn}"`);
+            }
+
+            this.addLog(`[RA] ✔ Alteração feita. Aguardando conclusão do AJAX (SGN)...`);
+            
+            // Aguarda a conclusão da requisição AJAX + 2 segundos recomendados
+            await this.aguardarAjax(2000);
         }
 
-        this.addLog(`[RA] ${initialScan.needsFill.length} habilidade(s) técnica(s) a preencher. Já preenchidas: ${initialScan.alreadyFilled.length}.`);
-
-        let lastFailures = null;
-        const needsJson = JSON.stringify(initialScan.needsFill.map(n => n.nome));
-        for (let attempt = 1; attempt <= 5; attempt++) {
-            this.addLog(`[RA] Tentativa ${attempt}/5 para preencher conceitos técnicos...`);
+        // Fase de Verificação e Retentativas
+        const maxRetries = 3;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            this.addLog(`[RA] Verificando preenchimento dos conceitos (Validação tentativa ${attempt}/${maxRetries})...`);
             
-            // Passe 1: Tenta preencher via UI (cliques no dropdown)
-            const passResult = await this.page.evaluate((sel, capsJson, needsJson) => {
+            const scan = await this.page.evaluate((sel, capsJson) => {
                 const caps = (() => { try { return JSON.parse(capsJson); } catch (e) { return capsJson; } })();
-                const needs = (() => { try { return JSON.parse(needsJson); } catch (e) { return needsJson; } })();
                 const normalize = (text) => text ? text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase() : '';
                 const normalizedCaps = [];
                 if (Array.isArray(caps)) {
@@ -439,92 +544,97 @@ class RAAutomation {
                 };
 
                 const rows = Array.from(document.querySelectorAll(sel));
-                const failures = [];
-                const changes = [];
+                const incorrect = [];
 
-                const findRowByName = (target) => {
-                    const tNorm = normalize(target);
-                    for (const tr of rows) {
-                        const spanTxt = tr.querySelector('span[id*="habilidadeTxt"]');
-                        let nomeHabilidade = spanTxt ? spanTxt.innerText.trim() : null;
-                        if (!nomeHabilidade) {
-                            const tds = tr.querySelectorAll('td');
-                            nomeHabilidade = tds.length > 1 ? tds[1].innerText.trim() : tr.innerText.trim();
-                        }
-                        if (!nomeHabilidade || !isTechnicalRow(nomeHabilidade)) continue;
-                        const n = normalize(nomeHabilidade);
-                        if (n.includes(tNorm) || tNorm.includes(n) || n === tNorm) return { tr, nomeHabilidade };
+                rows.forEach(tr => {
+                    const spanTxt = tr.querySelector('span[id*="habilidadeTxt"]');
+                    let nomeHabilidade = spanTxt ? spanTxt.innerText.trim() : null;
+                    if (!nomeHabilidade) {
+                        const tds = tr.querySelectorAll('td');
+                        nomeHabilidade = tds.length > 1 ? tds[1].innerText.trim() : tr.innerText.trim();
                     }
-                    return null;
-                };
-
-                for (const targetName of needs) {
-                    const found = findRowByName(targetName);
-                    if (!found) { failures.push({ nome: targetName, desired: null, reason: 'linha não encontrada' }); continue; }
-                    const tr = found.tr;
-                    const nomeHabilidade = found.nomeHabilidade;
+                    if (!nomeHabilidade || !isTechnicalRow(nomeHabilidade)) return;
 
                     const normalizedName = normalize(nomeHabilidade);
                     const match = normalizedCaps.find(c => normalize(c.nome).includes(normalizedName) || normalizedName.includes(normalize(c.nome)));
-                    if (!match) { failures.push({ nome: nomeHabilidade, desired: null, reason: 'mapeamento não encontrado' }); continue; }
+                    if (match) {
+                        const label = tr.querySelector('label.ui-selectonemenu-label');
+                        const current = label ? label.innerText.trim().toUpperCase() : '';
+                        const desired = match.conceito.toUpperCase();
+                        
+                        if (current !== desired) {
+                            incorrect.push({ nomeSgn: nomeHabilidade, desired, current });
+                        }
+                    }
+                });
 
-                    const desired = match.conceito;
-                    const label = tr.querySelector('label.ui-selectonemenu-label');
-                    const current = label ? label.innerText.trim() : '';
-                    if (current === desired) { changes.push({ nome: nomeHabilidade, conceito: desired }); continue; }
+                return { incorrect };
+            }, linhasSeletor, JSON.stringify(this.capacidadesAlvo));
 
-                    // Estratégia 1: Tentar via select subjacente (mais confiável)
-                    const select = tr.querySelector('select[id$="_input"], select[id*="notaConceito_input"]');
-                    if (select) {
-                        const opt = Array.from(select.options).find(o => ((o.text || '').trim().toUpperCase() === desired) || (String(o.value).trim().toUpperCase() === desired));
+            if (scan.incorrect.length === 0) {
+                this.addLog(`✅ [RA] Validação concluída com sucesso: Todas as habilidades estão corretas!`);
+                return;
+            }
+
+            this.addLog(`⚠️ [RA] Conceitos incorretos/não preenchidos detectados: ${scan.incorrect.map(x => `"${x.nomeSgn}" (atual: "${x.current}", esperado: "${x.desired}")`).join(', ')}`);
+
+            if (attempt === maxRetries) {
+                break;
+            }
+
+            this.addLog(`[RA] Corrigindo habilidades incorretas na tentativa ${attempt}...`);
+            for (const item of scan.incorrect) {
+                this.addLog(`[RA] Re-preenchendo: "${item.nomeSgn}" → "${item.desired}"`);
+                
+                const rowInfo = await this.page.evaluate((sel, targetName) => {
+                    const normalize = (text) => text ? text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase() : '';
+                    const targetNorm = normalize(targetName);
+                    const rows = Array.from(document.querySelectorAll(sel));
+
+                    for (const tr of rows) {
+                        const spanTxt = tr.querySelector('span[id*="habilidadeTxt"]');
+                        let nome = spanTxt ? spanTxt.innerText.trim() : null;
+                        if (!nome) {
+                            const tds = tr.querySelectorAll('td');
+                            nome = tds.length > 1 ? tds[1].innerText.trim() : tr.innerText.trim();
+                        }
+                        if (!nome) continue;
+
+                        const normName = normalize(nome);
+                        if (normName === targetNorm || normName.includes(targetNorm) || targetNorm.includes(normName)) {
+                            const select = tr.querySelector('select[id$="_input"], select[id*="notaConceito_input"]');
+                            return {
+                                found: true,
+                                selectId: select ? select.id : null
+                            };
+                        }
+                    }
+                    return { found: false };
+                }, linhasSeletor, item.nomeSgn);
+
+                if (rowInfo.found && rowInfo.selectId) {
+                    await this.page.evaluate((selectId, desiredVal) => {
+                        const select = document.getElementById(selectId);
+                        if (!select) return;
+                        const opt = Array.from(select.options).find(o => 
+                            (o.text || '').trim().toUpperCase() === desiredVal || 
+                            String(o.value).trim().toUpperCase() === desiredVal
+                        );
                         if (opt) {
                             select.value = opt.value;
                             select.dispatchEvent(new Event('input', { bubbles: true }));
                             select.dispatchEvent(new Event('change', { bubbles: true }));
                             select.dispatchEvent(new Event('blur', { bubbles: true }));
-                            changes.push({ nome: nomeHabilidade, conceito: desired });
-                            continue;
                         }
-                    }
+                    }, rowInfo.selectId, item.desired);
 
-                    // Estratégia 2: Tentar via UI menu click
-                    const menu = tr.querySelector('div.ui-selectonemenu');
-                    if (menu) {
-                        try {
-                            menu.scrollIntoView({ block: 'center' });
-                            menu.click();
-                        } catch (e) {}
-                    }
-
-                    failures.push({ nome: nomeHabilidade, desired, current, attempted: true });
-                }
-
-                return { failures, changes };
-            }, linhasSeletor, capsJson, needsJson);
-
-            if (passResult.changes && passResult.changes.length > 0) {
-                for (const changed of passResult.changes) {
-                    this.addLog(`[RA] ✔ "${changed.nome}" → "${changed.conceito}"`);
+                    await this.aguardarAjax(2000);
                 }
             }
-
-            if (!passResult.failures || passResult.failures.length === 0) {
-                this.addLog(`[RA] ✔ Todos os conceitos técnicos foram preenchidos.`);
-                lastFailures = null;
-                break;
-            }
-
-            lastFailures = passResult.failures;
-            this.addLog(`⚠️ [RA] Ainda faltam ${passResult.failures.length} conceito(s) após a tentativa ${attempt}. Tentando novamente...`);
-            await pSleep(CONFIG.delays.step * 2);
         }
 
-        if (lastFailures && lastFailures.length > 0) {
-            const faltando = lastFailures.map(f => `${f.nome} (esperado: ${f.desired || '??'})`).join(' | ');
-            this.addLog(`❌ [RA] Não foi possível preencher todos os conceitos técnicos: ${faltando}`);
-            await this.capturarDebugHtml('Falha preencher conceitos técnicos', [linhasSeletor, '#modalDadosAtitudes', 'div[id*="panelAtitudes"]']);
-            throw new Error(`Falha ao preencher conceitos técnicos. Habilidades não preenchidas: ${faltando}`);
-        }
+        await this.capturarDebugHtml('Falha final na validação dos conceitos técnicos', [linhasSeletor, '#modalDadosAtitudes']);
+        throw new Error('Falha crítica: Não foi possível preencher todos os conceitos técnicos após as retentativas.');
     }
 
     // ============================================================
@@ -533,54 +643,75 @@ class RAAutomation {
 
     async importarSocioemocionais() {
         this.addLog(`[RA] Importando observações socioemocionais...`);
-
         const seletorBtn = 'button[id*="importarObservacoes"]';
-        try {
-            await this.page.waitForSelector(seletorBtn, { timeout: 10000 });
-        } catch (e) {
-            this.addLog(`⚠️ [RA] Botão de importar socioemocionais não encontrado: ${e.message}`);
-            return;
-        }
-
-        const btn = await this.page.$(seletorBtn);
-        if (!btn) {
-            this.addLog(`⚠️ [RA] Botão de importar socioemocionais ausente.`);
-            return;
-        }
-
-        await this.page.evaluate(b => b.click(), btn);
-        await this.aguardarLoader();
-        await pSleep(CONFIG.delays.stepFast);  // reduzido de 1500
-
-        // Clica em Sim no modal de confirmação
-        const clicou = await this.page.evaluate(() => {
-            const candidatos = [
-                document.getElementById('confirmDialogObservacoes'),
-                document.querySelector('div[id*="confirmDialog"]:not([style*="display: none"])'),
-                document.querySelector('div.ui-dialog[style*="display: block"]')
-            ];
-            for (const d of candidatos) {
-                if (!d || window.getComputedStyle(d).display === 'none') continue;
-                const btnSim = Array.from(d.querySelectorAll('button')).find(b => {
-                    const t = b.innerText.trim().toUpperCase();
-                    return t.includes('SIM') || t.includes('CONFIRMAR') || b.classList.contains('ui-confirmdialog-yes');
-                });
-                if (btnSim) { btnSim.click(); return true; }
+        
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                await this.page.waitForSelector(seletorBtn, { timeout: 10000 });
+            } catch (e) {
+                this.addLog(`⚠️ [RA] Botão de importar socioemocionais não encontrado: ${e.message}`);
+                return;
             }
-            return false;
-        });
 
-        if (clicou) {
-            this.addLog(`[RA] Confirmação socioemocionais OK.`);
-        } else {
-            this.addLog(`⚠️ [RA] Modal de confirmação não encontrado, tentando seletor direto...`);
-            await this.page.click(
-                'button.ui-confirmdialog-yes, div[id*="confirmDialog"] button.ui-confirmdialog-yes'
-            ).catch(e => this.addLog(`⚠️ [RA] Clique direto falhou: ${e.message}`));
+            const btn = await this.page.$(seletorBtn);
+            if (!btn) {
+                this.addLog(`⚠️ [RA] Botão de importar socioemocionais ausente.`);
+                return;
+            }
+
+            this.addLog(`[RA] Clicando no botão de importação (Tentativa ${attempt}/3)...`);
+            await this.page.evaluate(b => b.click(), btn);
+            await this.aguardarAjax(500);
+
+            // Clica em Sim no modal de confirmação
+            const clicouConfirm = await this.page.evaluate(() => {
+                const candidatos = [
+                    document.getElementById('confirmDialogObservacoes'),
+                    document.querySelector('div[id*="confirmDialog"]:not([style*="display: none"])'),
+                    document.querySelector('div.ui-dialog[style*="display: block"]')
+                ];
+                for (const d of candidatos) {
+                    if (!d || window.getComputedStyle(d).display === 'none') continue;
+                    const btnSim = Array.from(d.querySelectorAll('button')).find(b => {
+                        const t = b.innerText.trim().toUpperCase();
+                        return t.includes('SIM') || t.includes('CONFIRMAR') || b.classList.contains('ui-confirmdialog-yes');
+                    });
+                    if (btnSim) { btnSim.click(); return true; }
+                }
+                return false;
+            });
+
+            if (clicouConfirm) {
+                this.addLog(`[RA] Confirmação socioemocionais clicada.`);
+            } else {
+                this.addLog(`⚠️ [RA] Dialog de confirmação não encontrado via busca de IDs, tentando seletor direto...`);
+                await this.page.click(
+                    'button.ui-confirmdialog-yes, div[id*="confirmDialog"] button.ui-confirmdialog-yes'
+                ).catch(e => this.addLog(`⚠️ [RA] Clique direto falhou: ${e.message}`));
+            }
+
+            await this.aguardarAjax(1500);
+
+            // Verifica se o preenchimento funcionou (se há alguma opção selecionada que não seja 'SELECIONE' ou vazia)
+            const preenchido = await this.page.evaluate(() => {
+                const table = document.querySelector('tbody[id*="dataTableHabilidadesSocioemocionais_data"]');
+                if (!table) return false;
+                const labels = Array.from(table.querySelectorAll('label.ui-selectonemenu-label'));
+                return labels.some(l => {
+                    const txt = l.innerText.trim().toUpperCase();
+                    return txt === 'EVIDENCIADO' || txt === 'EM PROCESSO' || txt === 'NAO EVIDENCIADO' || txt === 'NÃO EVIDENCIADO';
+                });
+            });
+
+            if (preenchido) {
+                this.addLog(`✅ [RA] Observações socioemocionais importadas com sucesso.`);
+                return;
+            }
+
+            this.addLog(`⚠️ [RA] Socioemocionais ainda parecem vazios após tentativa ${attempt}.`);
         }
 
-        await this.aguardarLoader();
-        await pSleep(CONFIG.delays.stepFast);  // reduzido de 1500
+        this.addLog(`⚠️ [RA] Aviso: Não foi possível confirmar a importação dos socioemocionais após 3 tentativas. Continuando mesmo assim...`);
     }
 
     // ============================================================
